@@ -13,3 +13,5 @@
 .externalNativeBuild
 .cxx
 local.properties
+ssh -keygen -t rsa -b 4096 "sapirshenhav@gmail.com"
+ssh -keygen -t rsa -b 4096 "sapirshenhav@gmail.com".pub
