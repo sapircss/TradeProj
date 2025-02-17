@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="horizontal"
+    android:padding="16dp"
+    android:background="@color/white">
+
+    <!-- Stock Symbol -->
+    <TextView
+        android:id="@+id/holding_symbol"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:textSize="18sp"
+        android:textColor="@color/black"
+        android:textStyle="bold"
+        android:text="AAPL" /> <!-- Placeholder text -->
+
+    <!-- Number of Shares -->
+    <TextView
+        android:id="@+id/holding_shares"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:textSize="16sp"
+        android:textColor="@color/black"
+        android:text="Shares: 10" /> <!-- Placeholder text -->
+
+    <!-- Stock Price -->
+    <TextView
+        android:id="@+id/holding_price"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:textSize="16sp"
+        android:textColor="@color/black"
+        android:text="$150.00" /> <!-- Placeholder text -->
+
+    <!-- Total Value -->
+    <TextView
+        android:id="@+id/holding_total_value"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:textSize="16sp"
+        android:textColor="@color/black"
+        android:text="Total: $1500.00" /> <!-- Placeholder text -->
+
+    <!-- Holding Change -->
+    <TextView
+        android:id="@+id/holding_change"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="16dp"
+        android:textSize="16sp"
+        android:textStyle="bold"
+        android:textColor="@color/positive"
+        android:text="+5%" /> <!-- Placeholder text -->
+
+</LinearLayout>

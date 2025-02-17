@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="utf-8"?>
+<navigation xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/navgraph"
+    app:startDestination="@id/login">
+
+    <!-- Login Fragment -->
+    <fragment
+        android:id="@+id/login"
+        android:name="com.example.tradeproj.Fragments.Login"
+        android:label="Login"
+        tools:layout="@layout/fragment_login">
+        <action
+            android:id="@+id/action_login_to_trade"
+            app:destination="@id/trade"/>
+        <action
+            android:id="@+id/action_login_to_register"
+            app:destination="@id/register"/>
+    </fragment>
+
+    <!-- Register Fragment -->
+    <fragment
+        android:id="@+id/register"
+        android:name="com.example.tradeproj.Fragments.Register"
+        android:label="Register"
+        tools:layout="@layout/fragment_register">
+        <action
+            android:id="@+id/action_register_to_login"
+            app:destination="@id/login"/>
+    </fragment>
+
+    <!-- Trade Fragment -->
+    <fragment
+        android:id="@+id/trade"
+        android:name="com.example.tradeproj.Fragments.Trade"
+        android:label="Trade"
+        tools:layout="@layout/fragment_trade">
+        <action
+            android:id="@+id/action_trade_to_buy"
+            app:destination="@id/buy"/>
+        <action
+            android:id="@+id/action_trade_to_sell"
+            app:destination="@id/sell"/>
+        <action android:id="@+id/action_trade_to_portfolio"
+            app:destination="@id/portfolio"/>
+        <action android:id="@+id/action_trade_to_deposit"
+            app:destination="@id/deposit"/>
+    </fragment>
+
+    <!-- Buy Fragment -->
+    <fragment
+        android:id="@+id/buy"
+        android:name="com.example.tradeproj.Fragments.Buy"
+        android:label="Buy"
+        tools:layout="@layout/fragment_buy">
+        <action
+            android:id="@+id/action_buy_to_trade"
+            app:destination="@id/trade"/>
+    </fragment>
+
+    <!-- Sell Fragment -->
+    <fragment
+        android:id="@+id/sell"
+        android:name= "com.example.tradeproj.Fragments.Sell"
+        android:label="Sell"
+        tools:layout="@layout/fragment_sell">
+        <action
+            android:id="@+id/action_sell_to_trade"
+            app:destination="@id/trade"/>
+    </fragment>
+
+
+    <fragment
+        android:id="@+id/portfolio"
+        android:name="com.example.tradeproj.Fragments.portfolio"
+        android:label="Portfolio"
+        tools:layout="@layout/fragment_portfolio">
+        <action
+            android:id="@+id/action_portfolio_to_trade"
+            app:destination="@id/trade"/>
+    </fragment>
+
+    <fragment
+        android:id="@+id/deposit"
+        android:name="com.example.tradeproj.Fragments.Deposit"
+        android:label="Deposit Cash"
+        tools:layout="@layout/fragment_deposit">
+        <action android:id="@+id/action_deposit_to_portfolio"
+            app:destination="@id/portfolio"/>
+    </fragment>
+
+</navigation>

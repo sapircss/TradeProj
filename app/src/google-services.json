@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "198835811074",
+    "project_id": "tradeapp-b6a77",
+    "storage_bucket": "tradeapp-b6a77.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:198835811074:android:2081ce93bc0230c727881b",
+        "android_client_info": {
+          "package_name": "com.example.stocktradingapp"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDrSSDoMkXNLAD2fa9Y9FJtYdDMkla52UM"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:198835811074:android:921d9ced82c2de2e27881b",
+        "android_client_info": {
+          "package_name": "com.example.tradeproj"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDrSSDoMkXNLAD2fa9Y9FJtYdDMkla52UM"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -1,0 +1,12 @@
+<resources>
+    <string name="app_name">TradeProj</string>
+    <!-- TODO: Remove or change this placeholder text -->
+    <string name="hello_blank_fragment">Hello blank fragment</string>
+    <string name="portfolio_title">Your Portfolio</string>
+    <string name="back_to_trade">Back to Trade</string>
+    <string name="deposit_hint">Enter amount to deposit</string>
+    <string name="deposit_cash">Deposit Cash</string>
+    <string name="back_to_portfolio">Back to Portfolio</string>
+    <string name="price_format">$%.2f</string>
+
+</resources>

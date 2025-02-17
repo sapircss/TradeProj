@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="black">#FF000000</color>
+    <color name="white">#FFFFFFFF</color>
+    <color name="primary">#ee6c4d</color> <!-- Main Theme Color -->
+    <color name="secondary">#3D5A80</color> <!-- Accent Color -->
+    <color name="positive">#27ae60</color> <!-- Green for positive change -->
+    <color name="negative">#c0392b</color> <!-- Red for negative change -->
+    <color name="background_gray">#F0F0F0</color> <!-- Light gray background -->
+    <color name="gray">#808080</color> <!-- Neutral gray -->
+    <color name="yellow">#FFD700</color> <!-- Added Yellow Color -->
+</resources>
