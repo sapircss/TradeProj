@@ -7,18 +7,17 @@ import android.view.ViewGroup;
 import android.widget.TextView;
 import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.RecyclerView;
-import com.example.tradeproj.items.WatchListItm; // ✅ Fixed Import
+import com.example.tradeproj.items.WatchListItm;
 import com.example.tradeproj.R;
 import java.util.ArrayList;
 import java.util.List;
 
 public class WatchListAdapter extends RecyclerView.Adapter<WatchListAdapter.ViewHolder> {
-    private List<WatchListItm> watchlist = new ArrayList<>();
+
+    private List<WatchListItm> watchlist;
 
     public WatchListAdapter(List<WatchListItm> watchlist) {
-        if (watchlist != null) {
-            this.watchlist = watchlist;
-        }
+        this.watchlist = watchlist;
     }
 
     @NonNull
@@ -36,7 +35,6 @@ public class WatchListAdapter extends RecyclerView.Adapter<WatchListAdapter.View
         holder.price.setText(String.format("$%.2f", item.getPrice()));
         holder.change.setText(String.format("%.2f%%", item.getPrice_change()));
 
-        // Set color based on stock price change
         int color = item.getPrice_change() >= 0 ?
                 holder.itemView.getContext().getColor(R.color.positive) :
                 holder.itemView.getContext().getColor(R.color.negative);
@@ -48,10 +46,6 @@ public class WatchListAdapter extends RecyclerView.Adapter<WatchListAdapter.View
         return watchlist != null ? watchlist.size() : 0;
     }
 
-    /**
-     * Update the watchlist with new items.
-     */
-    @SuppressLint("NotifyDataSetChanged")
     public void updateWatchlist(List<WatchListItm> newWatchlist) {
         if (newWatchlist != null) {
             this.watchlist.clear();

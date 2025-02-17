@@ -4,6 +4,7 @@ import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
 import com.google.firebase.database.*;
 import com.example.tradeproj.Models.UserPortfolio;
+import com.example.tradeproj.items.StockItem;
 import android.util.Log;
 import java.util.List;
 import java.util.ArrayList;
@@ -233,5 +234,11 @@ public class FirebaseManager {
         databaseReference.child(userId).child("favorites").child(symbol).removeValue()
                 .addOnSuccessListener(aVoid -> Log.d(TAG, "✅ Removed from favorites: " + symbol))
                 .addOnFailureListener(e -> Log.e(TAG, "❌ Failed to remove from favorites", e));
+    }
+
+
+
+    public interface OnStockPricesFetchedCallback {
+        void onStockPricesFetched(List<StockItem> stockItems);
     }
 }

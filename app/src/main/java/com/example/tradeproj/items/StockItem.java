@@ -20,7 +20,6 @@ public class StockItem {
         this.volume = volume;
         this.lastUpdated = new Date();
         this.isFavorite = false;
-        this.previousPrice = price; // ✅ Initialize previous price
     }
 
     public boolean isFavorite() {

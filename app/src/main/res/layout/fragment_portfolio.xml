@@ -69,6 +69,18 @@
         android:layout_marginTop="12dp"
         android:layout_marginBottom="8dp"/>
 
+    <Button
+        android:id="@+id/watchlistButton"
+        android:layout_width="match_parent"
+        android:layout_height="56dp"
+        android:text="Watchlist"
+        android:backgroundTint="@color/primary"
+        android:textColor="@android:color/white"
+        android:textSize="18sp"
+        android:layout_marginTop="12dp"
+        android:layout_marginBottom="8dp"/>
+
+
     <!-- Back to Trade Button -->
     <Button
         android:id="@+id/backPort"
@@ -79,4 +91,6 @@
         android:textColor="@android:color/white"
         android:textSize="18sp"
         android:layout_marginTop="8dp"/>
+
+
 </LinearLayout>

@@ -73,8 +73,12 @@ public class FinnhubApi {
             JsonObjectRequest request = new JsonObjectRequest(Request.Method.GET, url, null,
                     response -> {
                         double price = response.optDouble("c", -1);
+                        double change = response.optDouble("d", 0);
+                        double percentChange = response.optDouble("dp", 0);
+
                         if (price != -1) {
-                            stockItems.add(new StockItem(symbol, price, 0, 0, 0));
+                            // Pass 0 for volume as we are not using it in this method
+                            stockItems.add(new StockItem(symbol, price, change, percentChange, 0));
                             if (stockItems.size() == symbols.size()) {
                                 listener.onResponse(stockItems);
                             }
@@ -83,6 +87,8 @@ public class FinnhubApi {
             requestQueue.add(request);
         }
     }
+
+
 
     public void checkFavoriteStockUpdates(List<String> favoriteSymbols, ResponseListener<List<StockItem>> listener) {
         if (favoriteSymbols.isEmpty()) {

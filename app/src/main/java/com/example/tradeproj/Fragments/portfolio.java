@@ -33,7 +33,7 @@ public class portfolio extends Fragment {
     private FinnhubApi finnhubApi;
     private TextView totalProfitLossTextView;
     private TableLayout profitLossTable;
-    private Button backButton, depositButton;
+    private Button backButton, depositButton, watchlistButton;
 
     @Nullable
     @Override
@@ -45,6 +45,7 @@ public class portfolio extends Fragment {
         profitLossTable = view.findViewById(R.id.profitLossTable);
         backButton = view.findViewById(R.id.backPort);
         depositButton = view.findViewById(R.id.depositCash);
+        watchlistButton = view.findViewById(R.id.watchlistButton);
 
         portfolioRecyclerView.setLayoutManager(new LinearLayoutManager(getContext()));
 
@@ -58,6 +59,10 @@ public class portfolio extends Fragment {
 
         backButton.setOnClickListener(v -> Navigation.findNavController(view).navigate(R.id.trade));
         depositButton.setOnClickListener(v -> Navigation.findNavController(view).navigate(R.id.deposit));
+        watchlistButton.setOnClickListener(v -> Navigation.findNavController(view).navigate(R.id.watchList));
+
+
+
 
         return view;
     }
