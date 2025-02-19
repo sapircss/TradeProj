@@ -12,6 +12,8 @@ public class UserPortfolio {
     private double initialInvestment;
     private List<String> watchlist;
 
+    private double totalPortfolioValue; // ✅ Add missing field
+
     public UserPortfolio() {
         this.holdings = new HashMap<>();
         this.watchlist = new ArrayList<>();
@@ -37,6 +39,11 @@ public class UserPortfolio {
         if (!watchlist.contains(symbol)) {
             watchlist.add(symbol);
         }
+    }
+
+
+    public void setTotalPortfolioValue(double totalPortfolioValue) {
+        this.totalPortfolioValue = totalPortfolioValue;
     }
 
     public void removeFromWatchlist(String symbol) {
