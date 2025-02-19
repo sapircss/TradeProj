@@ -1,13 +1,15 @@
 package com.example.tradeproj.handlers;
 
+import android.util.Log;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
 import com.google.firebase.database.*;
 import com.example.tradeproj.Models.UserPortfolio;
 import com.example.tradeproj.items.StockItem;
-import android.util.Log;
 import java.util.List;
 import java.util.ArrayList;
+import java.util.Map;
+import java.util.HashMap;
 import java.util.concurrent.CompletableFuture;
 
 public class FirebaseManager {
@@ -32,7 +34,7 @@ public class FirebaseManager {
         return firebaseAuth.getCurrentUser();
     }
 
-    // ✅ **Fetch user's portfolio from Firebase**
+    // ✅ Fetch user's portfolio from Firebase
     public CompletableFuture<UserPortfolio> getUserPortfolio() {
         CompletableFuture<UserPortfolio> future = new CompletableFuture<>();
         FirebaseUser user = getCurrentUser();
@@ -71,7 +73,41 @@ public class FirebaseManager {
         return future;
     }
 
-    // ✅ **Update user's portfolio in Firebase**
+    // ✅ Fetch user’s favorite stocks from Firebase
+    public CompletableFuture<List<String>> getUserFavorites() {
+        CompletableFuture<List<String>> future = new CompletableFuture<>();
+        FirebaseUser user = firebaseAuth.getCurrentUser();
+
+        if (user == null) {
+            Log.e(TAG, "❌ User not logged in, cannot fetch favorites.");
+            future.completeExceptionally(new Exception("User not logged in"));
+            return future;
+        }
+
+        String userId = user.getUid();
+        databaseReference.child(userId).child("favorites")
+                .addListenerForSingleValueEvent(new ValueEventListener() {
+                    @Override
+                    public void onDataChange(DataSnapshot snapshot) {
+                        List<String> favorites = new ArrayList<>();
+                        for (DataSnapshot stockSnapshot : snapshot.getChildren()) {
+                            String symbol = stockSnapshot.getValue(String.class);
+                            if (symbol != null) favorites.add(symbol);
+                        }
+                        future.complete(favorites);
+                    }
+
+                    @Override
+                    public void onCancelled(DatabaseError error) {
+                        Log.e(TAG, "❌ Error fetching favorite stocks", error.toException());
+                        future.completeExceptionally(error.toException());
+                    }
+                });
+
+        return future;
+    }
+
+    // ✅ Update user's portfolio in Firebase
     public void updateUserPortfolio(UserPortfolio portfolio) {
         FirebaseUser user = getCurrentUser();
         if (user == null) {
@@ -81,11 +117,36 @@ public class FirebaseManager {
 
         String userId = user.getUid();
         databaseReference.child(userId).child("portfolio").setValue(portfolio)
-                .addOnSuccessListener(aVoid -> Log.d(TAG, "✅ Portfolio successfully updated"))
+                .addOnSuccessListener(aVoid -> {
+                    Log.d(TAG, "✅ Portfolio successfully updated");
+
+                    // ✅ Store Last Known Stock Prices
+                    storeLastStockPrices(portfolio.getHoldings());
+                })
                 .addOnFailureListener(e -> Log.e(TAG, "❌ Portfolio update failed", e));
     }
 
-    // ✅ **Deposit cash into user's account**
+    // ✅ Store last known stock prices in Firebase
+    private void storeLastStockPrices(Map<String, UserPortfolio.Holding> holdings) {
+        FirebaseUser user = getCurrentUser();
+        if (user == null) {
+            Log.e(TAG, "❌ Cannot store stock prices, user not logged in!");
+            return;
+        }
+
+        String userId = user.getUid();
+        DatabaseReference stockPricesRef = databaseReference.child(userId).child("lastStockPrices");
+
+        for (Map.Entry<String, UserPortfolio.Holding> entry : holdings.entrySet()) {
+            String symbol = entry.getKey();
+            double lastPrice = entry.getValue().getAveragePrice();
+            stockPricesRef.child(symbol).setValue(lastPrice);
+        }
+
+        Log.d(TAG, "✅ Stored last known stock prices in Firebase");
+    }
+
+    // ✅ Deposit cash into user's account
     public void depositCash(double amount, Runnable onSuccess, Runnable onFailure) {
         FirebaseUser user = getCurrentUser();
         if (user == null) {
@@ -107,7 +168,35 @@ public class FirebaseManager {
         });
     }
 
-    // ✅ **Buy stock and update portfolio**
+    // ✅ Add stock to user's favorites
+    public void addStockToFavorites(String symbol) {
+        FirebaseUser user = getCurrentUser();
+        if (user == null) {
+            Log.e(TAG, "❌ User not logged in, cannot add to favorites.");
+            return;
+        }
+
+        String userId = user.getUid();
+        databaseReference.child(userId).child("favorites").child(symbol).setValue(symbol)
+                .addOnSuccessListener(aVoid -> Log.d(TAG, "✅ Added to favorites: " + symbol))
+                .addOnFailureListener(e -> Log.e(TAG, "❌ Failed to add to favorites", e));
+    }
+
+    // ✅ Remove stock from user's favorites
+    public void removeStockFromFavorites(String symbol) {
+        FirebaseUser user = getCurrentUser();
+        if (user == null) {
+            Log.e(TAG, "❌ User not logged in, cannot remove from favorites.");
+            return;
+        }
+
+        String userId = user.getUid();
+        databaseReference.child(userId).child("favorites").child(symbol).removeValue()
+                .addOnSuccessListener(aVoid -> Log.d(TAG, "✅ Removed from favorites: " + symbol))
+                .addOnFailureListener(e -> Log.e(TAG, "❌ Failed to remove from favorites", e));
+    }
+
+    // ✅ Buy stock and update portfolio
     public void buyStock(String symbol, int quantity, double price, Runnable onSuccess, Runnable onFailure) {
         FirebaseUser user = getCurrentUser();
         if (user == null) {
@@ -172,73 +261,5 @@ public class FirebaseManager {
             onFailure.run();
             return null;
         });
-    }
-
-    // ✅ **Fetch favorite stocks from Firebase**
-    public CompletableFuture<List<String>> getUserFavorites() {
-        CompletableFuture<List<String>> future = new CompletableFuture<>();
-        FirebaseUser user = getCurrentUser();
-
-        if (user == null) {
-            Log.e(TAG, "❌ User not logged in, cannot fetch favorites.");
-            future.completeExceptionally(new Exception("User not logged in"));
-            return future;
-        }
-
-        String userId = user.getUid();
-        databaseReference.child(userId).child("favorites")
-                .addListenerForSingleValueEvent(new ValueEventListener() {
-                    @Override
-                    public void onDataChange(DataSnapshot snapshot) {
-                        List<String> favorites = new ArrayList<>();
-                        for (DataSnapshot stockSnapshot : snapshot.getChildren()) {
-                            String symbol = stockSnapshot.getValue(String.class);
-                            if (symbol != null) favorites.add(symbol);
-                        }
-                        future.complete(favorites);
-                    }
-
-                    @Override
-                    public void onCancelled(DatabaseError error) {
-                        Log.e(TAG, "❌ Error fetching favorite stocks", error.toException());
-                        future.completeExceptionally(error.toException());
-                    }
-                });
-
-        return future;
-    }
-
-    // ✅ **Add stock to user's favorites**
-    public void addStockToFavorites(String symbol) {
-        FirebaseUser user = getCurrentUser();
-        if (user == null) {
-            Log.e(TAG, "❌ User not logged in, cannot add to favorites.");
-            return;
-        }
-
-        String userId = user.getUid();
-        databaseReference.child(userId).child("favorites").child(symbol).setValue(symbol)
-                .addOnSuccessListener(aVoid -> Log.d(TAG, "✅ Added to favorites: " + symbol))
-                .addOnFailureListener(e -> Log.e(TAG, "❌ Failed to add to favorites", e));
-    }
-
-    // ✅ **Remove stock from user's favorites**
-    public void removeStockFromFavorites(String symbol) {
-        FirebaseUser user = getCurrentUser();
-        if (user == null) {
-            Log.e(TAG, "❌ User not logged in, cannot remove from favorites.");
-            return;
-        }
-
-        String userId = user.getUid();
-        databaseReference.child(userId).child("favorites").child(symbol).removeValue()
-                .addOnSuccessListener(aVoid -> Log.d(TAG, "✅ Removed from favorites: " + symbol))
-                .addOnFailureListener(e -> Log.e(TAG, "❌ Failed to remove from favorites", e));
-    }
-
-
-
-    public interface OnStockPricesFetchedCallback {
-        void onStockPricesFetched(List<StockItem> stockItems);
     }
 }
