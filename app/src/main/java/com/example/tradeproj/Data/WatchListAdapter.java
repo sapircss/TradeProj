@@ -1,6 +1,7 @@
 package com.example.tradeproj.Data;
 
 import android.annotation.SuppressLint;
+import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -47,10 +48,12 @@ public class WatchListAdapter extends RecyclerView.Adapter<WatchListAdapter.View
     }
 
     public void updateWatchlist(List<WatchListItm> newWatchlist) {
-        if (newWatchlist != null) {
+        if (newWatchlist != null && !newWatchlist.isEmpty()) {
             this.watchlist.clear();
             this.watchlist.addAll(newWatchlist);
             notifyDataSetChanged();
+        } else {
+            Log.d("WatchListAdapter", "⚠️ Empty watchlist received, keeping existing data.");
         }
     }
 
