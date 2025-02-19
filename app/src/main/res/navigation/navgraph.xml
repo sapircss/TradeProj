@@ -95,13 +95,16 @@
         android:name="com.example.tradeproj.Fragments.WatchList"
         android:label="WatchList"
         tools:layout="@layout/fragment_watch_list">
+
         <action
             android:id="@+id/action_watchlist_to_trade"
             app:destination="@id/trade"/>
+
         <action
             android:id="@+id/action_watchlist_to_portfolio"
             app:destination="@id/portfolio"/>
     </fragment>
+
 
 
 
