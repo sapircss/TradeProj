@@ -78,47 +78,55 @@ public class portfolio extends Fragment {
             }
 
             List<String> symbols = new ArrayList<>(portfolio.getHoldings().keySet());
-            finnhubApi.fetchStockPrices(symbols, stockItems -> {
-                if (stockItems == null || stockItems.isEmpty()) {
-                    requireActivity().runOnUiThread(() ->
-                            Toast.makeText(getContext(), "Failed to fetch stock prices!", Toast.LENGTH_SHORT).show()
-                    );
-                    return;
-                }
 
-                double totalPnl = 0;
-                List<StockItem> updatedStockItems = new ArrayList<>();
+            // ✅ FIXED: Now passing both success and error callbacks
+            finnhubApi.fetchStockPrices(symbols,
+                    stockItems -> { // Success Callback
+                        if (stockItems == null || stockItems.isEmpty()) {
+                            requireActivity().runOnUiThread(() ->
+                                    Toast.makeText(getContext(), "Failed to fetch stock prices!", Toast.LENGTH_SHORT).show()
+                            );
+                            return;
+                        }
 
-                requireActivity().runOnUiThread(() -> profitLossTable.removeAllViews()); // Clear old data
+                        double totalPnl = 0;
+                        List<StockItem> updatedStockItems = new ArrayList<>();
 
-                // Add table header
-                requireActivity().runOnUiThread(this::addTableHeader);
+                        requireActivity().runOnUiThread(() -> profitLossTable.removeAllViews()); // Clear old data
+                        requireActivity().runOnUiThread(this::addTableHeader);
 
-                for (StockItem stock : stockItems) {
-                    if (portfolio.getHoldings().containsKey(stock.getSymbol())) {
-                        UserPortfolio.Holding holding = portfolio.getHoldings().get(stock.getSymbol());
-                        double buyPrice = holding.getAveragePrice();
-                        int quantity = holding.getQuantity();
-                        double currentPrice = stock.getPrice();
-                        double pnl = (currentPrice - buyPrice) * quantity;
-                        double pnlPercentage = ((currentPrice - buyPrice) / buyPrice) * 100;
-                        totalPnl += pnl;
+                        for (StockItem stock : stockItems) {
+                            if (portfolio.getHoldings().containsKey(stock.getSymbol())) {
+                                UserPortfolio.Holding holding = portfolio.getHoldings().get(stock.getSymbol());
+                                double buyPrice = holding.getAveragePrice();
+                                int quantity = holding.getQuantity();
+                                double currentPrice = stock.getPrice();
+                                double pnl = (currentPrice - buyPrice) * quantity;
+                                double pnlPercentage = ((currentPrice - buyPrice) / buyPrice) * 100;
+                                totalPnl += pnl;
 
-                        stock.updateStock(currentPrice, pnl, pnlPercentage, quantity);
-                        updatedStockItems.add(stock);
+                                stock.updateStock(currentPrice, pnl, pnlPercentage, quantity);
+                                updatedStockItems.add(stock);
 
-                        // Update table row dynamically
-                        requireActivity().runOnUiThread(() -> addStockRow(stock.getSymbol(), buyPrice, currentPrice, quantity, pnl));
+                                requireActivity().runOnUiThread(() ->
+                                        addStockRow(stock.getSymbol(), buyPrice, currentPrice, quantity, pnl)
+                                );
+                            }
+                        }
+
+                        final double finalTotalPnl = totalPnl;
+                        requireActivity().runOnUiThread(() -> {
+                            adapter.updateStocks(updatedStockItems);
+                            totalProfitLossTextView.setText(String.format("Total Profit/Loss: $%.2f", finalTotalPnl));
+                            totalProfitLossTextView.setTextColor(finalTotalPnl >= 0 ? Color.GREEN : Color.RED);
+                        });
+                    },
+                    errorMessage -> { // Error Callback
+                        requireActivity().runOnUiThread(() ->
+                                Toast.makeText(getContext(), "Error fetching stock prices: " + errorMessage, Toast.LENGTH_SHORT).show()
+                        );
                     }
-                }
-
-                final double finalTotalPnl = totalPnl;
-                requireActivity().runOnUiThread(() -> {
-                    adapter.updateStocks(updatedStockItems);
-                    totalProfitLossTextView.setText(String.format("Total Profit/Loss: $%.2f", finalTotalPnl));
-                    totalProfitLossTextView.setTextColor(finalTotalPnl >= 0 ? Color.GREEN : Color.RED);
-                });
-            });
+            );
         }).exceptionally(e -> {
             requireActivity().runOnUiThread(() ->
                     Toast.makeText(getContext(), "Error loading portfolio", Toast.LENGTH_SHORT).show()
