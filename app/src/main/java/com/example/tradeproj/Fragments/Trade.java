@@ -1,6 +1,7 @@
 package com.example.tradeproj.Fragments;
 
 import android.os.Bundle;
+import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -21,8 +22,11 @@ import com.example.tradeproj.R;
 import com.example.tradeproj.handlers.FinnhubApi;
 import com.example.tradeproj.handlers.FirebaseManager;
 import com.example.tradeproj.items.StockItem;
+
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
+import java.util.Collections;
 
 public class Trade extends Fragment {
     private RecyclerView stocksRecyclerView;
@@ -52,33 +56,17 @@ public class Trade extends Fragment {
         portfolioButton = view.findViewById(R.id.portfolioButton);
 
         firebaseManager = FirebaseManager.getInstance();
-        stockAdapter = new StocksAdapter(new ArrayList<>(), getContext(), stock -> showBuySellDepositDialog(view, stock));
+        stockAdapter = new StocksAdapter(new ArrayList<>(), getContext(), stock -> showBuySellDialog(view, stock));
         stocksRecyclerView.setLayoutManager(new LinearLayoutManager(getActivity()));
         stocksRecyclerView.setAdapter(stockAdapter);
 
+        // 🔹 FIX: Pass context to FinnhubApi to prevent getInstance() error
         finnhubApi = FinnhubApi.getInstance(requireContext());
+
         stockViewModel = new ViewModelProvider(this).get(StockViewModel.class);
         stockViewModel.getStockList().observe(getViewLifecycleOwner(), this::updateStockList);
 
         fetchTopStocks();
-
-        searchView.setOnQueryTextListener(new SearchView.OnQueryTextListener() {
-            @Override
-            public boolean onQueryTextSubmit(String query) {
-                isFiltered = true;
-                fetchStockData(List.of(query.toUpperCase()));
-                return true;
-            }
-
-            @Override
-            public boolean onQueryTextChange(String newText) {
-                if (newText.trim().isEmpty() && isFiltered) {
-                    isFiltered = false;
-                    fetchTopStocks();
-                }
-                return false;
-            }
-        });
 
         portfolioButton.setOnClickListener(v -> Navigation.findNavController(view).navigate(R.id.portfolio));
 
@@ -86,27 +74,52 @@ public class Trade extends Fragment {
     }
 
     private void fetchTopStocks() {
-        finnhubApi.fetchTopActiveStocks(symbols -> {
-            if (symbols == null || symbols.isEmpty()) {
-                Toast.makeText(getContext(), "Failed to fetch top stocks!", Toast.LENGTH_SHORT).show();
-                return;
-            }
-            fetchStockData(symbols);
-        });
+        stockViewModel.fetchTopStocks();
     }
 
     private void fetchStockData(List<String> symbols) {
-        finnhubApi.fetchStockPrices(symbols, stockItems -> {
-            if (stockItems == null || stockItems.isEmpty()) {
-                Toast.makeText(getContext(), "Failed to fetch stock prices!", Toast.LENGTH_SHORT).show();
-                return;
-            }
-            updateStockList(stockItems);
-        });
+        stockViewModel.fetchStockData(symbols);
     }
 
     private void updateStockList(List<StockItem> stockItems) {
         stockAdapter.updateStocks(stockItems);
+    }
+
+
+    private void checkForFavoriteStockUpdates() {
+        firebaseManager.getUserFavorites().thenAccept((List<String> favoriteSymbols) -> {
+            // Ensure favoriteSymbols is not null
+            favoriteSymbols = Objects.requireNonNullElseGet(favoriteSymbols, Collections::emptyList);
+
+            if (favoriteSymbols.isEmpty()) {
+                Log.d(TAG, "⚠ No favorite stocks to check updates.");
+                return;
+            }
+
+            // ✅ FIXED: Now passing both success and error callbacks
+            finnhubApi.fetchStockPrices(favoriteSymbols,
+                    updatedStocks -> { // Success Callback
+                        updatedStocks = Objects.requireNonNullElseGet(updatedStocks, Collections::emptyList);
+
+                        if (updatedStocks.isEmpty()) {
+                            Log.d(TAG, "⚠ No updates for favorite stocks.");
+                            return;
+                        }
+
+                        for (StockItem stock : updatedStocks) {
+                            if (Math.abs(stock.getPriceChangePercentage()) > 1.0) {
+                                showNotification(stock);
+                            }
+                        }
+                    },
+                    errorMessage -> { // Error Callback
+                        Log.e(TAG, "❌ Error fetching stock updates: " + errorMessage);
+                    }
+            );
+        }).exceptionally(e -> {
+            Log.e(TAG, "❌ Error fetching favorite stock updates", e);
+            return null;
+        });
     }
 
     private void showBuySellDialog(View view, StockItem stock) {
@@ -127,37 +140,7 @@ public class Trade extends Fragment {
                 .show();
     }
 
-    private void showBuySellDepositDialog(View view, StockItem stock) {
-        new AlertDialog.Builder(getContext())
-                .setTitle("Choose an action")
-                .setMessage("Do you want to buy, sell, or deposit cash?")
-                .setPositiveButton("Buy", (dialog, which) -> {
-                    Bundle bundle = new Bundle();
-                    bundle.putString("selectedStock", stock.getSymbol());
-                    Navigation.findNavController(view).navigate(R.id.buy, bundle);
-                })
-                .setNegativeButton("Sell", (dialog, which) -> {
-                    Bundle bundle = new Bundle();
-                    bundle.putString("selectedStock", stock.getSymbol());
-                    Navigation.findNavController(view).navigate(R.id.sell, bundle);
-                })
-                .setNeutralButton("Deposit Cash", (dialog, which) ->
-                        Navigation.findNavController(view).navigate(R.id.deposit))
-                .setCancelable(true)
-                .show();
-    }
 
-    private void checkForFavoriteStockUpdates() {
-        firebaseManager.getUserFavorites().thenAccept(favoriteSymbols -> {
-            finnhubApi.checkFavoriteStockUpdates(favoriteSymbols, updatedStocks -> {
-                for (StockItem stock : updatedStocks) {
-                    if (Math.abs(stock.getPriceChangePercentage()) > 1.0) { // Notify if price change > 1%
-                        showNotification(stock);
-                    }
-                }
-            });
-        });
-    }
 
     private void showNotification(StockItem stock) {
         new AlertDialog.Builder(getContext())
@@ -170,7 +153,6 @@ public class Trade extends Fragment {
     @Override
     public void onResume() {
         super.onResume();
-        fetchTopStocks(); // 🔹 Reload top 10 stocks when returning to Trade page
+        fetchTopStocks();
     }
-
 }
