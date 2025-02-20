@@ -9,11 +9,13 @@ import android.widget.ImageButton;
 import android.widget.TextView;
 import android.widget.Toast;
 import androidx.annotation.NonNull;
+import androidx.recyclerview.widget.DiffUtil;
 import androidx.recyclerview.widget.RecyclerView;
 import com.example.tradeproj.R;
 import com.example.tradeproj.handlers.FirebaseManager;
 import com.example.tradeproj.items.StockItem;
 import java.util.List;
+import java.util.Locale;
 
 public class StocksAdapter extends RecyclerView.Adapter<StocksAdapter.StockViewHolder> {
     private List<StockItem> stockList;
@@ -42,31 +44,32 @@ public class StocksAdapter extends RecyclerView.Adapter<StocksAdapter.StockViewH
     @Override
     public void onBindViewHolder(@NonNull StockViewHolder holder, int position) {
         StockItem stock = stockList.get(position);
-        holder.symbol.setText(stock.getSymbol());
-        holder.price.setText(String.format("$%.2f", stock.getPrice()));
-        holder.change.setText(String.format("%.2f%%", stock.getPercentChange()));
 
-        // ✅ Set color based on stock price change (green if positive, red if negative)
+        // ✅ Set stock details with Locale-safe formatting
+        holder.symbol.setText(stock.getSymbol());
+        holder.price.setText(String.format(Locale.US, "$%.2f", stock.getPrice()));
+        holder.change.setText(String.format(Locale.US, "%.2f%%", stock.getPercentChange()));
+
+        // ✅ Set text color based on price movement
         int color = stock.getPercentChange() >= 0 ?
                 context.getColor(R.color.positive) :
                 context.getColor(R.color.negative);
         holder.change.setTextColor(color);
 
-        // ✅ Initialize favorite button state from database
-        firebaseManager.getUserFavorites().thenAccept(favorites -> {
-            boolean isFavorite = favorites.contains(stock.getSymbol());
-            stock.setFavorite(isFavorite);
-            holder.favoriteButton.setImageResource(isFavorite ?
-                    R.drawable.ic_star_filled : R.drawable.ic_star_border);
-        });
+        // ✅ Set favorite icon **without flickering**
+        holder.favoriteButton.setImageResource(
+                stock.isFavorite() ? R.drawable.ic_star_filled : R.drawable.ic_star_border
+        );
 
-        // ✅ Handle Favorite Button Click
+        // ✅ Handle Favorite Button Click - **Optimized for Instant UI Updates**
         holder.favoriteButton.setOnClickListener(v -> {
             boolean newFavoriteStatus = !stock.isFavorite();
-            stock.setFavorite(newFavoriteStatus);
-            holder.favoriteButton.setImageResource(newFavoriteStatus ?
-                    R.drawable.ic_star_filled : R.drawable.ic_star_border);
+            stock.setFavorite(newFavoriteStatus); // ✅ Update state immediately
+            holder.favoriteButton.setImageResource(
+                    newFavoriteStatus ? R.drawable.ic_star_filled : R.drawable.ic_star_border
+            );
 
+            // ✅ Update Firebase asynchronously
             if (newFavoriteStatus) {
                 firebaseManager.addStockToFavorites(stock.getSymbol());
                 Toast.makeText(context, stock.getSymbol() + " added to favorites", Toast.LENGTH_SHORT).show();
@@ -76,9 +79,10 @@ public class StocksAdapter extends RecyclerView.Adapter<StocksAdapter.StockViewH
             }
         });
 
-        // ✅ Handle Stock Item Click
+        // ✅ Handle item click for stock actions
         holder.itemView.setOnClickListener(v -> stockClickListener.onStockClick(stock));
     }
+
 
     @Override
     public int getItemCount() {
@@ -87,9 +91,12 @@ public class StocksAdapter extends RecyclerView.Adapter<StocksAdapter.StockViewH
 
     @SuppressLint("NotifyDataSetChanged")
     public void updateStocks(List<StockItem> newStockList) {
-        this.stockList = newStockList;
-        notifyDataSetChanged();
+        stockList.clear();
+        stockList.addAll(newStockList);
+        notifyDataSetChanged(); // ✅ Ensures UI refresh
     }
+
+
 
     public static class StockViewHolder extends RecyclerView.ViewHolder {
         TextView symbol, price, change;

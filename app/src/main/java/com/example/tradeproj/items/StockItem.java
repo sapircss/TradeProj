@@ -10,9 +10,10 @@ public class StockItem {
     private long volume;
     private Date lastUpdated;
     private boolean isFavorite;
-    private double previousPrice;  // ✅ Track previous price for change calculation
+    private double previousPrice;
+    private int quantity;  // ✅ NEW: Store quantity
 
-    public StockItem(String symbol, double price, double change, double percentChange, long volume) {
+    public StockItem(String symbol, double price, double change, double percentChange, long volume, int quantity) {
         this.symbol = symbol;
         this.price = price;
         this.change = change;
@@ -20,6 +21,15 @@ public class StockItem {
         this.volume = volume;
         this.lastUpdated = new Date();
         this.isFavorite = false;
+        this.quantity = quantity; // ✅ Initialize quantity
+    }
+
+    public int getQuantity() {  // ✅ NEW: Get quantity
+        return quantity;
+    }
+
+    public void setQuantity(int quantity) {  // ✅ NEW: Set quantity
+        this.quantity = quantity;
     }
 
     public boolean isFavorite() {
@@ -58,15 +68,13 @@ public class StockItem {
         return previousPrice;
     }
 
-    // ✅ **NEW: Get percentage price change since last update**
     public double getPriceChangePercentage() {
         if (previousPrice == 0) return 0;
         return ((price - previousPrice) / previousPrice) * 100;
     }
 
-    // 🔹 **Update stock price dynamically**
     public void updateStock(double newPrice, double change, double percentChange, long volume) {
-        this.previousPrice = this.price;  // ✅ Store old price before updating
+        this.previousPrice = this.price;
         this.price = newPrice;
         this.change = change;
         this.percentChange = percentChange;
@@ -84,6 +92,7 @@ public class StockItem {
                 ", volume=" + volume +
                 ", lastUpdated=" + lastUpdated +
                 ", previousPrice=" + previousPrice +
+                ", quantity=" + quantity +
                 '}';
     }
 }

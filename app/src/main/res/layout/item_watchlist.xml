@@ -33,4 +33,14 @@
         android:textStyle="bold"
         android:textColor="@color/positive"
         android:text="0%" /> <!-- Placeholder -->
+
+    <ImageButton
+        android:id="@+id/favorite_button"
+        android:layout_width="48dp"
+        android:layout_height="48dp"
+        android:src="@drawable/ic_star_filled"
+        android:background="?attr/selectableItemBackgroundBorderless"
+        android:contentDescription="Favorite"
+        android:padding="8dp"/>
+
 </LinearLayout>

@@ -14,44 +14,23 @@
         android:orientation="vertical"
         android:padding="15dp">
 
+        <!-- ✅ Single Search Field -->
         <SearchView
             android:id="@+id/search_stock"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:queryHint="Search Stocks..."
-            android:textColor="@color/white"
-            android:iconifiedByDefault="false" />
-
-        <EditText
-            android:id="@+id/symbolName"
-            android:layout_width="match_parent"
-            android:layout_height="48dp"
-            android:minHeight="48dp"
-            android:hint="Enter Stock Symbol"
-            android:textColor="@color/black"
-            android:textSize="18sp"
-            android:inputType="textCapCharacters"
-            android:padding="12dp"
-            android:background="@android:drawable/editbox_background"
-            android:layout_marginTop="16dp"/>
-
-        <Button
-            android:id="@+id/updateButton"
-            android:layout_width="match_parent"
-            android:layout_height="48dp"
-            android:minHeight="48dp"
-            android:text="Get Latest Price"
-            android:backgroundTint="#FF5722"
-            android:textColor="@android:color/white"
-            android:textSize="18sp"
-            android:layout_marginTop="8dp"/>
+            android:iconifiedByDefault="false"
+            android:background="@android:color/transparent"
+            android:textColorHint="@android:color/white"
+            android:textColor="@android:color/white"/>
 
         <TextView
             android:id="@+id/stockPriceText"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="Stock Price: "
-            android:textColor="@color/white"
+            android:textColor="@android:color/white"
             android:textSize="20sp"
             android:textStyle="bold"
             android:layout_marginTop="10dp"/>

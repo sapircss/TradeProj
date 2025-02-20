@@ -13,21 +13,20 @@ import java.util.List;
 import java.util.Map;
 
 public class StockViewModel extends AndroidViewModel {
-    public static final long CACHE_DURATION = 60000; // 1 Minute Cache
+    private static final long CACHE_EXPIRY_TIME = 60000; // 1 Minute Cache
 
     private final MutableLiveData<List<StockItem>> stockList = new MutableLiveData<>();
+    private final MutableLiveData<List<StockItem>> topStockList = new MutableLiveData<>(); // ✅ Cache for top stocks
     private final Map<String, StockItem> stockCache = new HashMap<>();
 
     private final FinnhubApi finnhubApi;
-    private final List<StockItem> cachedStockList = new ArrayList<>();
     private long lastUpdatedTime = 0;
+    private long lastTopStocksUpdateTime = 0; // ✅ Track top stock cache time
 
-    private static final long CACHE_EXPIRY_TIME = 60000; // 1 Minute
-
+    private static final String TAG = "StockViewModel";
 
     public StockViewModel(Application application) {
         super(application);
-        // 🔹 FIX: Pass application context to FinnhubApi
         finnhubApi = FinnhubApi.getInstance(application.getApplicationContext());
     }
 
@@ -35,39 +34,81 @@ public class StockViewModel extends AndroidViewModel {
         return stockList;
     }
 
+    /**
+     * ✅ Fetches stock data with caching to avoid redundant API calls.
+     */
     public void fetchStockData(List<String> symbols) {
         long currentTime = System.currentTimeMillis();
+        List<StockItem> cachedStocks = new ArrayList<>();
 
-        // ✅ Use cached data if within expiry time
-        if (!stockCache.isEmpty() && (currentTime - lastUpdatedTime < CACHE_EXPIRY_TIME)) {
-            List<StockItem> cachedStocks = new ArrayList<>(stockCache.values());
+        // ✅ Check if requested symbols exist in cache
+        boolean allCached = true;
+        for (String symbol : symbols) {
+            if (stockCache.containsKey(symbol) && (currentTime - lastUpdatedTime < CACHE_EXPIRY_TIME)) {
+                cachedStocks.add(stockCache.get(symbol));
+            } else {
+                allCached = false;
+            }
+        }
+
+        if (allCached) {
+            Log.d(TAG, "✅ Returning cached stock data.");
             stockList.postValue(cachedStocks);
             return;
         }
 
+        // ✅ Fetch latest prices if cache is outdated
+        Log.d(TAG, "🔄 Fetching stock prices from API...");
         finnhubApi.fetchStockPrices(symbols,
                 stocks -> {
                     if (stocks != null && !stocks.isEmpty()) {
-                        stockCache.clear();
                         for (StockItem stock : stocks) {
-                            stockCache.put(stock.getSymbol(), stock);
+                            stockCache.put(stock.getSymbol(), stock); // ✅ Update cache only for fetched stocks
                         }
                         lastUpdatedTime = System.currentTimeMillis();
                         stockList.postValue(new ArrayList<>(stockCache.values()));
                     }
                 },
-                error -> Log.e("StockViewModel", "❌ Error fetching stock prices: " + error)
+                error -> Log.e(TAG, "❌ Error fetching stock prices: " + error)
         );
     }
 
-
+    /**
+     * ✅ Fetches the top 10 stocks and caches them.
+     */
     public void fetchTopStocks() {
+        long currentTime = System.currentTimeMillis();
+
+        // ✅ Use cached top stocks if not expired
+        if (topStockList.getValue() != null && !topStockList.getValue().isEmpty()
+                && (currentTime - lastTopStocksUpdateTime < CACHE_EXPIRY_TIME)) {
+            Log.d(TAG, "✅ Returning cached top stocks.");
+            stockList.postValue(topStockList.getValue());  // ✅ Fix: Ensure UI gets updated
+            return;
+        }
+
+        Log.d(TAG, "🔍 Fetching top 10 active stocks...");
         finnhubApi.fetchTopActiveStocks(symbols -> {
             if (symbols == null || symbols.isEmpty()) {
-                Log.e("StockViewModel", "❌ Failed to fetch top stocks");
+                Log.e(TAG, "❌ No symbols available. Failed to fetch top stocks.");
                 return;
             }
-            fetchStockData(symbols);
+
+            // ✅ Fetch stock details for top stocks
+            finnhubApi.fetchStockPrices(symbols,
+                    stocks -> {
+                        if (stocks == null || stocks.isEmpty()) {
+                            Log.e(TAG, "❌ No stock prices received for top stocks.");
+                            return;
+                        }
+
+                        Log.d(TAG, "✅ Successfully fetched top stocks.");
+                        topStockList.postValue(stocks);  // ✅ Ensure LiveData is updated
+                        stockList.postValue(stocks); // ✅ Fix UI not updating
+                        lastTopStocksUpdateTime = System.currentTimeMillis();
+                    },
+                    error -> Log.e(TAG, "❌ Error fetching top stock prices: " + error)
+            );
         });
     }
 

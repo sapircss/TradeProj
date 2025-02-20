@@ -26,8 +26,8 @@ public class MainActivity extends AppCompatActivity {
         // ✅ Initialize Firebase Authentication
         mAuth = FirebaseAuth.getInstance();
 
-        // ✅ Ensure user is logged out on app start
-        mAuth.signOut();
+        // Removed signOut() to keep the user logged in (if needed)
+        // mAuth.signOut();
 
         // ✅ Initialize Firebase Realtime Database with correct URL
         FirebaseDatabase database = FirebaseDatabase.getInstance("https://tradeapp-b6a77-default-rtdb.firebaseio.com/");
@@ -51,6 +51,7 @@ public class MainActivity extends AppCompatActivity {
         Log.d(TAG, "🔄 Navigating to Login screen...");
         navController.navigate(R.id.login);
     }
+
 
     // ✅ Method to be called after successful login
     public void navigateToTrade() {

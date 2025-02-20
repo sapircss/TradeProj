@@ -1,70 +1,91 @@
 package com.example.tradeproj.Data;
 
-import android.annotation.SuppressLint;
-import android.util.Log;
+import android.content.Context;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.ImageButton;
 import android.widget.TextView;
+import android.widget.Toast;
 import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.RecyclerView;
-import com.example.tradeproj.items.WatchListItm;
 import com.example.tradeproj.R;
-import java.util.ArrayList;
+import com.example.tradeproj.handlers.FirebaseManager;
+import com.example.tradeproj.items.WatchListItm;
 import java.util.List;
 
-public class WatchListAdapter extends RecyclerView.Adapter<WatchListAdapter.ViewHolder> {
+public class WatchListAdapter extends RecyclerView.Adapter<WatchListAdapter.WatchListViewHolder> {
+    private List<WatchListItm> watchList;
+    private final Context context;
+    private final FirebaseManager firebaseManager;
 
-    private List<WatchListItm> watchlist;
-
-    public WatchListAdapter(List<WatchListItm> watchlist) {
-        this.watchlist = watchlist;
+    public WatchListAdapter(List<WatchListItm> watchList, Context context) {
+        this.watchList = watchList;
+        this.context = context;
+        this.firebaseManager = FirebaseManager.getInstance();
     }
 
     @NonNull
     @Override
-    public ViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
-        View view = LayoutInflater.from(parent.getContext()).inflate(R.layout.item_watchlist, parent, false);
-        return new ViewHolder(view);
+    public WatchListViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
+        View view = LayoutInflater.from(context).inflate(R.layout.item_watchlist, parent, false);
+        return new WatchListViewHolder(view);
     }
 
-    @SuppressLint("DefaultLocale")
     @Override
-    public void onBindViewHolder(@NonNull ViewHolder holder, int position) {
-        WatchListItm item = watchlist.get(position);
-        holder.symbol.setText(item.getSymbol());
-        holder.price.setText(String.format("$%.2f", item.getPrice()));
-        holder.change.setText(String.format("%.2f%%", item.getPrice_change()));
+    public void onBindViewHolder(@NonNull WatchListViewHolder holder, int position) {
+        WatchListItm stock = watchList.get(position);
+        holder.symbol.setText(stock.getSymbol());
+        holder.price.setText(String.format("$%.2f", stock.getPrice()));
+        holder.change.setText(String.format("%.2f%%", stock.getChangePercentage()));
 
-        int color = item.getPrice_change() >= 0 ?
-                holder.itemView.getContext().getColor(R.color.positive) :
-                holder.itemView.getContext().getColor(R.color.negative);
+        int color = stock.getChangePercentage() >= 0 ?
+                context.getColor(R.color.positive) :
+                context.getColor(R.color.negative);
         holder.change.setTextColor(color);
+
+        // ✅ Set correct favorite status without extra Firebase calls
+        holder.favoriteButton.setImageResource(stock.isFavorite() ? R.drawable.ic_star_filled : R.drawable.ic_star_border);
+
+        // ✅ Handle Favorite Button Click
+        holder.favoriteButton.setOnClickListener(v -> {
+            boolean newFavoriteStatus = !stock.isFavorite();
+            stock.setFavorite(newFavoriteStatus);
+            holder.favoriteButton.setImageResource(newFavoriteStatus ?
+                    R.drawable.ic_star_filled : R.drawable.ic_star_border);
+
+            if (newFavoriteStatus) {
+                firebaseManager.addStockToFavorites(stock.getSymbol());
+                Toast.makeText(context, stock.getSymbol() + " added to favorites", Toast.LENGTH_SHORT).show();
+            } else {
+                firebaseManager.removeStockFromFavorites(stock.getSymbol());
+                Toast.makeText(context, stock.getSymbol() + " removed from favorites", Toast.LENGTH_SHORT).show();
+            }
+
+            notifyItemChanged(position); // ✅ Only update clicked item, prevent flickering
+        });
     }
 
     @Override
     public int getItemCount() {
-        return watchlist != null ? watchlist.size() : 0;
+        return watchList.size();
     }
 
-    public void updateWatchlist(List<WatchListItm> newWatchlist) {
-        if (newWatchlist != null && !newWatchlist.isEmpty()) {
-            this.watchlist.clear();
-            this.watchlist.addAll(newWatchlist);
-            notifyDataSetChanged();
-        } else {
-            Log.d("WatchListAdapter", "⚠️ Empty watchlist received, keeping existing data.");
-        }
+    public void updateWatchlist(List<WatchListItm> newWatchList) {
+        this.watchList = newWatchList;
+        notifyDataSetChanged();
     }
 
-    static class ViewHolder extends RecyclerView.ViewHolder {
+    public static class WatchListViewHolder extends RecyclerView.ViewHolder {
         TextView symbol, price, change;
+        ImageButton favoriteButton;
 
-        ViewHolder(View itemView) {
+        public WatchListViewHolder(View itemView) {
             super(itemView);
             symbol = itemView.findViewById(R.id.watchlist_item_symbol);
             price = itemView.findViewById(R.id.watchlist_item_price);
             change = itemView.findViewById(R.id.watchlist_item_change);
+            favoriteButton = itemView.findViewById(R.id.favorite_button);
         }
     }
 }
