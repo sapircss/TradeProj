@@ -11,10 +11,8 @@ import com.android.volley.toolbox.JsonObjectRequest;
 import com.android.volley.toolbox.Volley;
 import com.example.tradeproj.items.StockItem;
 import org.json.JSONObject;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public class FinnhubApi {
     private static final String API_KEY = "cuqm2uhr01qsd02f4d2gcuqm2uhr01qsd02f4d30";
@@ -22,11 +20,9 @@ public class FinnhubApi {
     private final RequestQueue requestQueue;
     private static final String TAG = "FinnhubApi";
     private final Map<String, StockItem> stockCache = new HashMap<>();
-    private long lastApiCallTime = 0;
+    private final Map<String, Long> lastRequestTimes = new HashMap<>();
     private static final long RATE_LIMIT_INTERVAL = 60000; // 1 minute
-
-    private static final int MAX_RETRIES = 3;
-    private int retryCount = 0;
+    private static final long RETRY_DELAY = 5000; // Retry API call after 5 sec if rate limit exceeded
 
     private FinnhubApi(Context context) {
         requestQueue = Volley.newRequestQueue(context.getApplicationContext());
@@ -39,7 +35,7 @@ public class FinnhubApi {
         return instance;
     }
 
-    // ✅ Fetch top active stocks for Trade page
+    // ✅ Fetch top active stocks
     public void fetchTopActiveStocks(ResponseListener<List<String>> listener) {
         String url = "https://finnhub.io/api/v1/stock/symbol?exchange=US&token=" + API_KEY;
         Log.d(TAG, "Fetching top active stocks: " + url);
@@ -69,68 +65,84 @@ public class FinnhubApi {
         requestQueue.add(request);
     }
 
-    // ✅ Fetch stock prices (batch processing to prevent rate limit)
+    // ✅ Fetch stock prices with cache & rate limit handling
     public void fetchStockPrices(List<String> symbols, StockDataCallback callback, StockErrorCallback errorCallback) {
         long currentTime = System.currentTimeMillis();
+        List<StockItem> stockItems = new ArrayList<>();
+        List<String> missingSymbols = new ArrayList<>();
+        AtomicInteger completedRequests = new AtomicInteger(0);
 
-        // ✅ Ensure we respect the rate limit
-        if (currentTime - lastApiCallTime < RATE_LIMIT_INTERVAL && !stockCache.isEmpty()) {
-            Log.d(TAG, "✅ Using cached stock data to avoid API rate limit.");
-            callback.onSuccess(new ArrayList<>(stockCache.values()));
+        // ✅ Use cache if data is recent
+        for (String symbol : symbols) {
+            if (stockCache.containsKey(symbol) && (currentTime - lastRequestTimes.getOrDefault(symbol, 0L) < RATE_LIMIT_INTERVAL)) {
+                Log.d(TAG, "✅ Using cached stock data for: " + symbol);
+                stockItems.add(stockCache.get(symbol));
+            } else {
+                missingSymbols.add(symbol);
+            }
+        }
+
+        // ✅ Return cached results if no new API calls are needed
+        if (missingSymbols.isEmpty()) {
+            callback.onSuccess(stockItems);
             return;
         }
 
-        lastApiCallTime = currentTime;
-        List<StockItem> stockItems = new ArrayList<>();
+        final int totalRequests = missingSymbols.size();
 
-        for (String symbol : symbols) {
-            new Handler(Looper.getMainLooper()).postDelayed(() -> {
-                String url = "https://finnhub.io/api/v1/quote?symbol=" + symbol + "&token=" + API_KEY;
-                Log.d(TAG, "📡 Fetching stock data: " + url);
-
-                JsonObjectRequest request = new JsonObjectRequest(Request.Method.GET, url, null,
-                        response -> {
-                            double price = response.optDouble("c", -1);
-                            double change = response.optDouble("d", 0);
-                            double percentChange = response.optDouble("dp", 0);
-                            long volume = response.optLong("v", 0);
-                            int quantity = 0; // Default quantity
-
-                            if (price != -1) {
-                                StockItem stock = new StockItem(symbol, price, change, percentChange, volume, quantity);
-                                stockCache.put(symbol, stock);
-                                stockItems.add(stock);
-                            }
-
-                            // ✅ Once all requests finish, update the UI
-                            if (stockItems.size() == symbols.size()) {
-                                callback.onSuccess(stockItems);
-                            }
-                        },
-                        error -> {
-                            if (error.networkResponse != null && error.networkResponse.statusCode == 429 && retryCount < MAX_RETRIES) {
-                                retryCount++;
-                                Log.e(TAG, "⚠️ API rate limit hit, retrying in " + (2000 * retryCount) + "ms... (Attempt " + retryCount + ")");
-
-                                new Handler(Looper.getMainLooper()).postDelayed(
-                                        () -> fetchStockPrices(symbols, callback, errorCallback),
-                                        (long)  (2000 * retryCount)  // ✅ Exponential backoff delay
-                                );
-                            } else {
-                                Log.e(TAG, "❌ Error fetching stock data for " + symbol);
-                                errorCallback.onError("Failed to fetch stock updates.");
-                            }
-                        });
-
-                requestQueue.add(request);
-            }, 200);
+        for (int i = 0; i < totalRequests; i++) {
+            final String symbol = missingSymbols.get(i);
+            new Handler(Looper.getMainLooper()).postDelayed(() ->
+                    makeApiRequest(symbol, stockItems, totalRequests, completedRequests, callback, errorCallback), i * 200);
         }
     }
 
+    // ✅ Helper function to make API requests with rate limit handling
+    private void makeApiRequest(String symbol, List<StockItem> stockItems, int totalRequests, AtomicInteger completedRequests, StockDataCallback callback, StockErrorCallback errorCallback) {
+        String url = "https://finnhub.io/api/v1/quote?symbol=" + symbol + "&token=" + API_KEY;
+        Log.d(TAG, "📡 Fetching stock data: " + url);
 
+        JsonObjectRequest request = new JsonObjectRequest(Request.Method.GET, url, null,
+                response -> {
+                    double price = response.optDouble("c", -1);
+                    double change = response.optDouble("d", 0);
+                    double percentChange = response.optDouble("dp", 0);
+                    long volume = response.optLong("v", 0);
+                    int quantity = 0;
 
+                    double buyPrice = stockCache.containsKey(symbol) ? stockCache.get(symbol).getBuyPrice() : 0.0;
 
-    // ✅ Update watchlist stock prices dynamically
+                    if (price != -1) {
+                        StockItem stock = new StockItem(symbol, price, change, percentChange, volume, quantity, buyPrice);
+                        stockCache.put(symbol, stock);
+                        lastRequestTimes.put(symbol, System.currentTimeMillis());
+                        stockItems.add(stock);
+                        Log.d(TAG, "✅ Updated Price for " + symbol + ": $" + price);
+                    } else {
+                        Log.e(TAG, "❌ Invalid stock price for: " + symbol);
+                    }
+
+                    if (completedRequests.incrementAndGet() == totalRequests) {
+                        callback.onSuccess(stockItems);
+                    }
+                },
+                error -> {
+                    if (error.networkResponse != null && error.networkResponse.statusCode == 429) {
+                        Log.e(TAG, "❌ Rate Limit Exceeded for " + symbol + ". Retrying in " + RETRY_DELAY / 1000 + "s...");
+                        new Handler(Looper.getMainLooper()).postDelayed(() ->
+                                makeApiRequest(symbol, stockItems, totalRequests, completedRequests, callback, errorCallback), RETRY_DELAY);
+                    } else {
+                        Log.e(TAG, "❌ Error fetching stock data for " + symbol + ": " + error.getMessage());
+                        if (completedRequests.incrementAndGet() == totalRequests) {
+                            callback.onSuccess(stockItems);
+                        }
+                    }
+                });
+
+        requestQueue.add(request);
+    }
+
+    // ✅ Fetch & update favorite stocks dynamically
     public void checkFavoriteStockUpdates(List<String> favoriteSymbols, ResponseListener<List<StockItem>> listener) {
         if (favoriteSymbols == null || favoriteSymbols.isEmpty()) {
             listener.onResponse(new ArrayList<>());
@@ -138,31 +150,33 @@ public class FinnhubApi {
         }
 
         List<StockItem> updatedStocks = new ArrayList<>();
-        int[] completedRequests = {0};
+        AtomicInteger completedRequests = new AtomicInteger(0);
 
         for (String symbol : favoriteSymbols) {
             String url = "https://finnhub.io/api/v1/quote?symbol=" + symbol + "&token=" + API_KEY;
+
             JsonObjectRequest request = new JsonObjectRequest(Request.Method.GET, url, null,
                     response -> {
                         double price = response.optDouble("c", -1);
                         double change = response.optDouble("d", 0);
                         double percentChange = response.optDouble("dp", 0);
-                        long volume = response.optLong("v", 0); // ✅ Ensure volume is set
-                        int quantity = 0; // ✅ Default quantity (adjust as needed)
+                        long volume = response.optLong("v", 0);
+                        int quantity = 0;
+
+                        double buyPrice = stockCache.containsKey(symbol) ? stockCache.get(symbol).getBuyPrice() : 0.0;
 
                         if (price != -1) {
-                            updatedStocks.add(new StockItem(symbol, price, change, percentChange, volume, quantity)); // ✅ Pass correct params
+                            updatedStocks.add(new StockItem(symbol, price, change, percentChange, volume, quantity, buyPrice));
+                            Log.d(TAG, "✅ Updated Favorite Stock: " + symbol + " @ $" + price);
                         }
 
-                        completedRequests[0]++;
-                        if (completedRequests[0] == favoriteSymbols.size()) {
+                        if (completedRequests.incrementAndGet() == favoriteSymbols.size()) {
                             listener.onResponse(updatedStocks);
                         }
                     },
                     error -> {
-                        Log.e(TAG, "❌ Error fetching stock update for " + symbol);
-                        completedRequests[0]++;
-                        if (completedRequests[0] == favoriteSymbols.size()) {
+                        Log.e(TAG, "❌ Error fetching stock update for " + symbol + ": " + error.getMessage());
+                        if (completedRequests.incrementAndGet() == favoriteSymbols.size()) {
                             listener.onResponse(updatedStocks);
                         }
                     });
@@ -170,7 +184,6 @@ public class FinnhubApi {
             requestQueue.add(request);
         }
     }
-
 
     // ✅ Define interfaces for API responses
     public interface ResponseListener<T> {

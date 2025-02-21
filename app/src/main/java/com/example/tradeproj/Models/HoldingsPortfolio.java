@@ -1,10 +1,5 @@
 package com.example.tradeproj.Models;
 
-import com.example.tradeproj.items.StockItem;
-
-import java.util.ArrayList;
-import java.util.List;
-
 public class HoldingsPortfolio {
     private String symbol;
     private int shares;
@@ -21,38 +16,6 @@ public class HoldingsPortfolio {
         this.holdingChange = holdingChange;
         this.portfolioPercentage = portfolioPercentage;
     }
-
-    private List<HoldingsPortfolio> convertStockItemsToHoldings(List<StockItem> stockItems, UserPortfolio portfolio) {
-        List<HoldingsPortfolio> holdings = new ArrayList<>();
-        double totalPortfolioValue = 0;
-
-        for (StockItem stock : stockItems) {
-            if (portfolio.getHoldings().containsKey(stock.getSymbol())) {
-                UserPortfolio.Holding holding = portfolio.getHoldings().get(stock.getSymbol());
-                double totalValue = holding.getQuantity() * stock.getPrice();
-                double holdingChange = ((stock.getPrice() - holding.getAveragePrice()) / holding.getAveragePrice()) * 100;
-                totalPortfolioValue += totalValue; // ✅ Sum total portfolio value
-
-                holdings.add(new HoldingsPortfolio(
-                        stock.getSymbol(),
-                        holding.getQuantity(),
-                        stock.getPrice(),
-                        totalValue,
-                        holdingChange,
-                        0  // ✅ Placeholder for portfolioPercentage
-                ));
-            }
-        }
-
-        // ✅ Calculate percentage for each holding
-        for (HoldingsPortfolio holding : holdings) {
-            double portfolioPercentage = (totalPortfolioValue > 0) ? (holding.getTotalValue() / totalPortfolioValue) * 100 : 0;
-            holding.setPortfolioPercentage(portfolioPercentage);
-        }
-
-        return holdings;
-    }
-
 
     public String getSymbol() { return symbol; }
     public void setSymbol(String symbol) { this.symbol = symbol; }

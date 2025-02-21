@@ -1,6 +1,8 @@
 package com.example.tradeproj.Fragments;
 
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -31,7 +33,8 @@ public class WatchList extends Fragment {
     private Button backToTradeButton, backToPortfolioButton;
 
     private static final String TAG = "WatchListFragment";
-    private Set<String> favoriteStocks = new HashSet<>();
+
+    private Set<String> favoriteStocks = new HashSet<>(); // ✅ Keep track of user's favorite stocks
 
     @Override
     public View onCreateView(LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
@@ -46,8 +49,8 @@ public class WatchList extends Fragment {
         firebaseManager = FirebaseManager.getInstance();
         finnhubApi = FinnhubApi.getInstance(getContext());
 
-        // Fetch and update only favorite stocks
-        fetchFavoriteStocks();
+        // ✅ Load watchlist initially
+        loadWatchlist();
 
         backToTradeButton.setOnClickListener(v -> Navigation.findNavController(v).navigate(R.id.action_watchlist_to_trade));
         backToPortfolioButton.setOnClickListener(v -> Navigation.findNavController(v).navigate(R.id.action_watchlist_to_portfolio));
@@ -55,45 +58,32 @@ public class WatchList extends Fragment {
         return view;
     }
 
-    /** ✅ Reloads watchlist when returning to this page */
+    /** ✅ Always reload watchlist when returning */
     @Override
     public void onResume() {
         super.onResume();
         Log.d(TAG, "📢 Resuming Watchlist Page, fetching favorite stocks...");
-
-        firebaseManager.getUserFavorites().thenAccept(favoriteSymbols -> {
-            if (favoriteSymbols == null || favoriteSymbols.isEmpty()) {
-                Log.d(TAG, "⚠ No favorite stocks found.");
-                updateWatchlist(new ArrayList<>()); // ✅ Clear UI if no favorites
-                return;
-            }
-
-            Log.d(TAG, "🔍 Fetching stock prices for watchlist: " + favoriteSymbols);
-
-            // ✅ USE checkFavoriteStockUpdates() here!
-            finnhubApi.checkFavoriteStockUpdates(favoriteSymbols,
-                    updatedStocks -> requireActivity().runOnUiThread(() -> displayWatchlist(updatedStocks))
-            );
-        }).exceptionally(e -> {
-            Log.e(TAG, "❌ Error fetching favorite stocks", e);
-            return null;
-        });
+        new Handler(Looper.getMainLooper()).postDelayed(this::loadWatchlist, 500);
     }
 
-
-
-    /** ✅ Fetch only user's favorite stocks from Firebase */
-    private void fetchFavoriteStocks() {
+    /** ✅ Fetch favorite stocks from Firebase & update UI */
+    private void loadWatchlist() {
         firebaseManager.getUserFavorites().thenAccept(favorites -> {
+            if (!isAdded()) return; // ✅ Prevent crashes if fragment is no longer attached
+
             if (favorites == null || favorites.isEmpty()) {
                 Log.d(TAG, "⚠ No favorite stocks found.");
                 favoriteStocks.clear();
-                updateWatchlist(new ArrayList<>()); // Clear UI
-            } else {
-                favoriteStocks = new HashSet<>(favorites);
-                Log.d(TAG, "✅ User Favorites: " + favoriteStocks);
-                fetchStockPrices(new ArrayList<>(favoriteStocks));
+                setWatchlistData(new ArrayList<>()); // ✅ Clear UI
+                return;
             }
+
+            // ✅ Store favorite stocks
+            favoriteStocks = new HashSet<>(favorites);
+            Log.d(TAG, "✅ User Favorites: " + favoriteStocks);
+
+            // ✅ Fetch stock prices for only favorite stocks
+            fetchStockPrices(new ArrayList<>(favoriteStocks));
         }).exceptionally(e -> {
             Log.e(TAG, "❌ Error fetching favorite stocks", e);
             return null;
@@ -101,11 +91,10 @@ public class WatchList extends Fragment {
     }
 
     /** ✅ Fetch stock prices only for favorite stocks */
-    /** ✅ Fetch stock prices only for favorite stocks and update their favorite status */
     private void fetchStockPrices(List<String> favoriteSymbols) {
         if (favoriteSymbols.isEmpty()) {
             Log.d(TAG, "⚠ No favorite stocks to fetch prices for.");
-            updateWatchlist(new ArrayList<>()); // Clear UI
+            setWatchlistData(new ArrayList<>()); // Clear UI
             return;
         }
 
@@ -118,29 +107,23 @@ public class WatchList extends Fragment {
                         requireActivity().runOnUiThread(() -> updateStockListWithFavorites(stockItems)); // ✅ Fixes missing update
                     } else {
                         Log.e(TAG, "⚠ No stock prices returned.");
-                        updateWatchlist(new ArrayList<>()); // Clear UI
+                        setWatchlistData(new ArrayList<>()); // Clear UI
                     }
                 },
                 errorMessage -> {
                     Log.e(TAG, "❌ Error fetching stock prices: " + errorMessage);
-                    requireActivity().runOnUiThread(() -> updateWatchlist(new ArrayList<>())); // Clear UI on error
+                    requireActivity().runOnUiThread(() -> setWatchlistData(new ArrayList<>())); // Clear UI on error
                 }
         );
     }
 
     /** ✅ Ensures stocks in the watchlist have correct star status */
     private void updateStockListWithFavorites(List<StockItem> stockItems) {
-        firebaseManager.getUserFavorites().thenAccept(favoriteSymbols -> {
-            for (StockItem stock : stockItems) {
-                stock.setFavorite(favoriteSymbols.contains(stock.getSymbol())); // ✅ Fix favorite status
-            }
-            requireActivity().runOnUiThread(() -> displayWatchlist(stockItems)); // ✅ Update UI
-        }).exceptionally(e -> {
-            Log.e(TAG, "❌ Error updating watchlist with favorites", e);
-            return null;
-        });
+        for (StockItem stock : stockItems) {
+            stock.setFavorite(favoriteStocks.contains(stock.getSymbol())); // ✅ Ensure correct favorite status
+        }
+        requireActivity().runOnUiThread(() -> displayWatchlist(stockItems)); // ✅ Update UI
     }
-
 
     /** ✅ Converts `StockItem` to `WatchListItm` with correct star status */
     private void displayWatchlist(List<StockItem> stockItems) {
@@ -150,11 +133,13 @@ public class WatchList extends Fragment {
             watchListItem.setFavorite(stock.isFavorite()); // ✅ Use updated favorite status
             watchListItems.add(watchListItem);
         }
-        updateWatchlist(watchListItems);
+        setWatchlistData(watchListItems);
     }
 
     /** ✅ Updates UI and refreshes watchlist */
-    private void updateWatchlist(List<WatchListItm> watchListItems) {
+    private void setWatchlistData(List<WatchListItm> watchListItems) {
+        if (!isAdded()) return; // ✅ Prevent crashes if fragment is detached
+
         requireActivity().runOnUiThread(() -> {
             if (watchListAdapter == null) {
                 watchListAdapter = new WatchListAdapter(watchListItems, requireContext());
@@ -164,6 +149,4 @@ public class WatchList extends Fragment {
             }
         });
     }
-
-
 }

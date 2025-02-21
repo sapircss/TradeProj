@@ -11,9 +11,10 @@ public class StockItem {
     private Date lastUpdated;
     private boolean isFavorite;
     private double previousPrice;
-    private int quantity;  // ✅ NEW: Store quantity
+    private int quantity; // ✅ NEW: Store quantity
+    private double buyPrice; // ✅ NEW: Store buy price
 
-    public StockItem(String symbol, double price, double change, double percentChange, long volume, int quantity) {
+    public StockItem(String symbol, double price, double change, double percentChange, long volume, int quantity, double buyPrice) {
         this.symbol = symbol;
         this.price = price;
         this.change = change;
@@ -22,14 +23,34 @@ public class StockItem {
         this.lastUpdated = new Date();
         this.isFavorite = false;
         this.quantity = quantity; // ✅ Initialize quantity
+        this.buyPrice = buyPrice; // ✅ Initialize buy price
     }
 
-    public int getQuantity() {  // ✅ NEW: Get quantity
+    // ✅ NEW: Get P&L (Profit/Loss)
+    public double getPnl() {
+        return (price - buyPrice) * quantity;
+    }
+
+    // ✅ NEW: Get P&L Percentage
+    public double getPnlPercentage() {
+        if (buyPrice == 0) return 0;
+        return ((price - buyPrice) / buyPrice) * 100;
+    }
+
+    public int getQuantity() {
         return quantity;
     }
 
-    public void setQuantity(int quantity) {  // ✅ NEW: Set quantity
+    public void setQuantity(int quantity) {
         this.quantity = quantity;
+    }
+
+    public double getBuyPrice() {
+        return buyPrice;
+    }
+
+    public void setBuyPrice(double buyPrice) {
+        this.buyPrice = buyPrice;
     }
 
     public boolean isFavorite() {
@@ -93,6 +114,9 @@ public class StockItem {
                 ", lastUpdated=" + lastUpdated +
                 ", previousPrice=" + previousPrice +
                 ", quantity=" + quantity +
+                ", buyPrice=" + buyPrice +
+                ", PnL=" + getPnl() +
+                ", PnL%=" + getPnlPercentage() +
                 '}';
     }
 }

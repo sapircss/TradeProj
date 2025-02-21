@@ -2,7 +2,6 @@ package com.example.tradeproj.Fragments;
 
 import android.graphics.Color;
 import android.os.Bundle;
-import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -13,33 +12,29 @@ import android.widget.TextView;
 import android.widget.Toast;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.appcompat.app.AlertDialog;
 import androidx.fragment.app.Fragment;
 import androidx.navigation.Navigation;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
-import com.example.tradeproj.Data.UserPortfolioAdapter;
-import com.example.tradeproj.Models.HoldingsPortfolio;
+import com.example.tradeproj.Data.StocksAdapter;
 import com.example.tradeproj.R;
 import com.example.tradeproj.handlers.FirebaseManager;
 import com.example.tradeproj.handlers.FinnhubApi;
 import com.example.tradeproj.Models.UserPortfolio;
 import com.example.tradeproj.items.StockItem;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Locale;
-import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public class portfolio extends Fragment {
     private RecyclerView portfolioRecyclerView;
-    private UserPortfolioAdapter portfolioAdapter;
+    private StocksAdapter adapter;
     private FirebaseManager firebaseManager;
     private FinnhubApi finnhubApi;
     private TextView totalProfitLossTextView;
     private TableLayout profitLossTable;
     private Button backButton, depositButton, watchlistButton;
-
-    private static final String TAG = "PortfolioFragment";
 
     @Nullable
     @Override
@@ -54,61 +49,43 @@ public class portfolio extends Fragment {
         watchlistButton = view.findViewById(R.id.watchlistButton);
 
         portfolioRecyclerView.setLayoutManager(new LinearLayoutManager(getContext()));
-        portfolioAdapter = new UserPortfolioAdapter(new ArrayList<>());
-        portfolioRecyclerView.setAdapter(portfolioAdapter);
+
+        adapter = new StocksAdapter(new ArrayList<>(), getContext(), stock -> showActionDialog(view, stock.getSymbol()));
+        portfolioRecyclerView.setAdapter(adapter);
 
         firebaseManager = FirebaseManager.getInstance();
         finnhubApi = FinnhubApi.getInstance(requireContext());
 
-        fetchPortfolio();
+        loadPortfolio();
 
         backButton.setOnClickListener(v -> Navigation.findNavController(view).navigate(R.id.trade));
         depositButton.setOnClickListener(v -> Navigation.findNavController(view).navigate(R.id.deposit));
-        watchlistButton.setOnClickListener(v -> {
-            try {
-                Navigation.findNavController(view).navigate(R.id.watchList);
-            } catch (Exception e) {
-                Log.e(TAG, "❌ Navigation to Watchlist failed", e);
-                Toast.makeText(getContext(), "Error opening Watchlist", Toast.LENGTH_SHORT).show();
-            }
-        });
+        watchlistButton.setOnClickListener(v -> Navigation.findNavController(view).navigate(R.id.watchList));
 
         return view;
     }
 
-    @Override
-    public void onResume() {
-        super.onResume();
-        Log.d(TAG, "📢 Resuming Portfolio Page, fetching stocks...");
-        fetchPortfolio();
-    }
-
-    /**
-     * ✅ Fetches the user's portfolio from Firebase and updates UI.
-     */
-    private void fetchPortfolio() {
+    private void loadPortfolio() {
         firebaseManager.getUserPortfolio().thenAccept(portfolio -> {
             if (portfolio == null || portfolio.getHoldings().isEmpty()) {
-                Log.e(TAG, "⚠ No stocks found in portfolio.");
                 requireActivity().runOnUiThread(() -> {
                     totalProfitLossTextView.setText("No holdings available");
-                    portfolioAdapter.updatePortfolio(new ArrayList<>());
+                    Toast.makeText(getContext(), "No stocks in portfolio!", Toast.LENGTH_SHORT).show();
                 });
                 return;
             }
 
             List<String> symbols = new ArrayList<>(portfolio.getHoldings().keySet());
-            Log.d(TAG, "🔍 Portfolio Symbols: " + symbols);
 
-            finnhubApi.fetchStockPrices(symbols,
-                    stockItems -> requireActivity().runOnUiThread(() -> {
-                        Log.d(TAG, "✅ Updating UI with portfolio stocks.");
-                        updatePortfolioUI(portfolio, stockItems);
-                    }),
-                    error -> Log.e(TAG, "❌ Error fetching portfolio stock prices: " + error)
-            );
+            // ✅ Reset the table and RecyclerView
+            requireActivity().runOnUiThread(() -> {
+                profitLossTable.removeAllViews();
+                addTableHeader();
+                profitLossTable.setVisibility(View.VISIBLE);
+            });
+
+            fetchStockPricesWithDelay(symbols, portfolio);
         }).exceptionally(e -> {
-            Log.e(TAG, "❌ Error loading portfolio", e);
             requireActivity().runOnUiThread(() ->
                     Toast.makeText(getContext(), "Error loading portfolio", Toast.LENGTH_SHORT).show()
             );
@@ -116,84 +93,78 @@ public class portfolio extends Fragment {
         });
     }
 
-    /**
-     * ✅ Updates the portfolio UI with stock data and calculates profit/loss.
-     */
-    private void updatePortfolioUI(UserPortfolio portfolio, List<StockItem> stockItems) {
-        if (portfolio == null || portfolio.getHoldings().isEmpty()) {
-            Log.e(TAG, "❌ No holdings found in portfolio.");
-            totalProfitLossTextView.setText("No holdings available");
-            return;
-        }
+    private void fetchStockPricesWithDelay(List<String> symbols, UserPortfolio portfolio) {
+        List<StockItem> updatedStockItems = new ArrayList<>();
+        AtomicInteger completedRequests = new AtomicInteger(0);
 
-        double totalPnl = 0;
-        double totalPortfolioValue = 0;
-        List<HoldingsPortfolio> updatedHoldings = new ArrayList<>();
-        profitLossTable.removeAllViews();
-        addTableHeader();
+        for (String symbol : symbols) {
+            finnhubApi.fetchStockPrices(
+                    List.of(symbol),
+                    stockItems -> {
+                        if (stockItems == null || stockItems.isEmpty()) {
+                            return;
+                        }
+                        StockItem stock = stockItems.get(0);
 
-        Map<String, StockItem> stockMap = new HashMap<>();
-        for (StockItem stock : stockItems) {
-            stockMap.put(stock.getSymbol(), stock);
-        }
+                        if (portfolio.getHoldings().containsKey(stock.getSymbol())) {
+                            UserPortfolio.Holding holding = portfolio.getHoldings().get(stock.getSymbol());
+                            double buyPrice = holding.getAveragePrice();
+                            int quantity = holding.getQuantity();
+                            double currentPrice = stock.getPrice();
+                            double pnl = (currentPrice - buyPrice) * quantity;
 
-        for (String holdingSymbol : portfolio.getHoldings().keySet()) {
-            UserPortfolio.Holding holding = portfolio.getHoldings().get(holdingSymbol);
-            if (holding == null) continue; // ✅ Ensure holding exists
+                            stock.updateStock(currentPrice, pnl, (pnl / buyPrice) * 100, quantity);
+                            updatedStockItems.add(stock);
 
-            double buyPrice = holding.getAveragePrice();
-            int quantity = holding.getQuantity();
-            double currentPrice = stockMap.containsKey(holdingSymbol) ? stockMap.get(holdingSymbol).getPrice() : buyPrice;
+                            requireActivity().runOnUiThread(() ->
+                                    addStockRow(stock.getSymbol(), buyPrice, currentPrice, quantity, pnl)
+                            );
+                        }
 
-            double holdingValue = quantity * currentPrice;
-            totalPortfolioValue += holdingValue;
-            double percentChange = (buyPrice > 0) ? ((currentPrice - buyPrice) / buyPrice) * 100 : 0;
-            double pnl = (currentPrice - buyPrice) * quantity;
-            totalPnl += pnl;
-
-            HoldingsPortfolio holdingPortfolio = new HoldingsPortfolio(
-                    holdingSymbol, quantity, currentPrice, holdingValue, percentChange, 0
+                        if (completedRequests.incrementAndGet() == symbols.size()) {
+                            updateUI(updatedStockItems);
+                        }
+                    },
+                    errorMessage -> {}
             );
-
-            updatedHoldings.add(holdingPortfolio);
-            addStockRow(holdingSymbol, buyPrice, currentPrice, quantity, pnl);
         }
+    }
 
-        for (HoldingsPortfolio holding : updatedHoldings) {
-            double portfolioPercentage = (totalPortfolioValue > 0) ? (holding.getTotalValue() / totalPortfolioValue) * 100 : 0;
-            holding.setPortfolioPercentage(portfolioPercentage);
-        }
-
-        portfolioAdapter.updatePortfolio(updatedHoldings);
-        totalProfitLossTextView.setText(String.format(Locale.US, "Total Profit/Loss: $%.2f", totalPnl));
-        totalProfitLossTextView.setTextColor(totalPnl >= 0 ? Color.GREEN : Color.RED);
-
-        Log.d(TAG, "✅ Portfolio UI Updated.");
+    private void updateUI(List<StockItem> updatedStockItems) {
+        requireActivity().runOnUiThread(() -> {
+            adapter.updateStocks(updatedStockItems);
+            adapter.notifyDataSetChanged(); // ✅ Ensure RecyclerView updates properly
+        });
     }
 
     private void addTableHeader() {
         TableRow headerRow = new TableRow(getContext());
+
         headerRow.addView(createHeaderCell("Stock"));
         headerRow.addView(createHeaderCell("Buy Price"));
         headerRow.addView(createHeaderCell("Current Price"));
         headerRow.addView(createHeaderCell("Qty"));
         headerRow.addView(createHeaderCell("P&L ($)"));
+
         profitLossTable.addView(headerRow);
     }
 
     private void addStockRow(String symbol, double buyPrice, double currPrice, int quantity, double pnl) {
-        TableRow row = new TableRow(getContext());
+        requireActivity().runOnUiThread(() -> {
+            TableRow row = new TableRow(getContext());
 
-        row.addView(createCell(symbol));
-        row.addView(createCell(String.format(Locale.US, "$%.2f", buyPrice)));
-        row.addView(createCell(String.format(Locale.US, "$%.2f", currPrice)));
-        row.addView(createCell(String.valueOf(quantity)));
+            row.addView(createCell(symbol));
+            row.addView(createCell(String.format("$%.2f", buyPrice)));
+            row.addView(createCell(String.format("$%.2f", currPrice)));
+            row.addView(createCell(String.valueOf(quantity)));
 
-        TextView pnlCell = createCell(String.format(Locale.US, "$%.2f", pnl));
-        pnlCell.setTextColor(pnl >= 0 ? Color.GREEN : Color.RED);
-        row.addView(pnlCell);
+            TextView pnlCell = createCell(String.format("$%.2f", pnl));
+            pnlCell.setTextColor(pnl >= 0 ? Color.GREEN : Color.RED);
+            row.addView(pnlCell);
 
-        profitLossTable.addView(row);
+            profitLossTable.addView(row);
+            profitLossTable.invalidate(); // ✅ Force refresh
+        });
     }
 
     private TextView createHeaderCell(String text) {
@@ -213,5 +184,23 @@ public class portfolio extends Fragment {
         textView.setPadding(8, 8, 8, 8);
         textView.setTextColor(Color.BLACK);
         return textView;
+    }
+
+    private void showActionDialog(View view, String stockSymbol) {
+        new AlertDialog.Builder(getContext())
+                .setTitle("Choose an action")
+                .setMessage("Do you want to Buy, Sell, or Deposit cash?")
+                .setPositiveButton("Buy", (dialog, which) -> {
+                    Bundle bundle = new Bundle();
+                    bundle.putString("selectedStock", stockSymbol);
+                    Navigation.findNavController(view).navigate(R.id.buy, bundle);
+                })
+                .setNegativeButton("Sell", (dialog, which) -> {
+                    Bundle bundle = new Bundle();
+                    bundle.putString("selectedStock", stockSymbol);
+                    Navigation.findNavController(view).navigate(R.id.sell, bundle);
+                })
+                .setNeutralButton("Deposit Cash", (dialog, which) -> Navigation.findNavController(view).navigate(R.id.deposit))
+                .show();
     }
 }

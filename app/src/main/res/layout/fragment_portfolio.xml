@@ -41,7 +41,9 @@
             android:stretchColumns="*"
             android:background="@android:color/darker_gray"
             android:padding="8dp"
-            android:layout_marginBottom="8dp"/>
+            android:layout_marginBottom="8dp"
+            android:visibility="gone"/> <!-- 🔹 Hide initially -->
+
     </ScrollView>
 
 

@@ -11,8 +11,7 @@ public class UserPortfolio {
     private double cashBalance;
     private double initialInvestment;
     private List<String> watchlist;
-
-    private double totalPortfolioValue; // ✅ Add missing field
+    private double totalPortfolioValue; // ✅ Added total value
 
     public UserPortfolio() {
         this.holdings = new HashMap<>();
@@ -27,23 +26,35 @@ public class UserPortfolio {
         this.watchlist = new ArrayList<>();
     }
 
+    // ✅ Calculates total portfolio value based on current stock prices
     public double getTotalPortfolioValue() {
         double total = cashBalance;
         for (Holding holding : holdings.values()) {
-            total += holding.getQuantity() * holding.getAveragePrice();
+            total += holding.getQuantity() * holding.getCurrentPrice(); // ✅ Now using market price
         }
         return total;
+    }
+
+    // ✅ Calculates total P&L in dollars
+    public double getPnl() {
+        double totalPnl = 0;
+        for (Holding holding : holdings.values()) {
+            double pnl = (holding.getCurrentPrice() - holding.getAveragePrice()) * holding.getQuantity();
+            totalPnl += pnl;
+        }
+        return totalPnl;
+    }
+
+    // ✅ Calculates total P&L as a percentage of the initial investment
+    public double getPnlPercentage() {
+        if (initialInvestment == 0) return 0;
+        return (getPnl() / initialInvestment) * 100;
     }
 
     public void addToWatchlist(String symbol) {
         if (!watchlist.contains(symbol)) {
             watchlist.add(symbol);
         }
-    }
-
-
-    public void setTotalPortfolioValue(double totalPortfolioValue) {
-        this.totalPortfolioValue = totalPortfolioValue;
     }
 
     public void removeFromWatchlist(String symbol) {
@@ -54,6 +65,7 @@ public class UserPortfolio {
         this.cashBalance += amount;
     }
 
+    // ✅ Add or update stock holdings
     public void addHolding(String symbol, int quantity, double averagePrice) {
         if (holdings.containsKey(symbol)) {
             Holding existingHolding = holdings.get(symbol);
@@ -63,7 +75,14 @@ public class UserPortfolio {
             existingHolding.setQuantity(newQuantity);
             existingHolding.setAveragePrice(newAveragePrice);
         } else {
-            holdings.put(symbol, new Holding(quantity, averagePrice));
+            holdings.put(symbol, new Holding(quantity, averagePrice, averagePrice)); // ✅ Set initial currentPrice
+        }
+    }
+
+    // ✅ Update stock price (called when fetching market prices)
+    public void updateHoldingPrice(String symbol, double currentPrice) {
+        if (holdings.containsKey(symbol)) {
+            holdings.get(symbol).setCurrentPrice(currentPrice);
         }
     }
 
@@ -100,15 +119,22 @@ public class UserPortfolio {
     public Map<String, Holding> getHoldings() { return holdings; }
     public void setHoldings(Map<String, Holding> holdings) { this.holdings = holdings; }
 
+    public void setTotalPortfolioValue(double totalPortfolioValue) {
+        this.totalPortfolioValue = totalPortfolioValue;
+    }
+
+    // ✅ Updated Holding class with `currentPrice`
     public static class Holding {
         private int quantity;
         private double averagePrice;
+        private double currentPrice; // ✅ NEW: Track market price
 
         public Holding() {}
 
-        public Holding(int quantity, double averagePrice) {
+        public Holding(int quantity, double averagePrice, double currentPrice) {
             this.quantity = quantity;
             this.averagePrice = averagePrice;
+            this.currentPrice = currentPrice;
         }
 
         public int getQuantity() { return quantity; }
@@ -116,5 +142,19 @@ public class UserPortfolio {
 
         public double getAveragePrice() { return averagePrice; }
         public void setAveragePrice(double averagePrice) { this.averagePrice = averagePrice; }
+
+        public double getCurrentPrice() { return currentPrice; }
+        public void setCurrentPrice(double currentPrice) { this.currentPrice = currentPrice; }
+
+        // ✅ Get P&L for this stock
+        public double getPnl() {
+            return (currentPrice - averagePrice) * quantity;
+        }
+
+        // ✅ Get P&L percentage for this stock
+        public double getPnlPercentage() {
+            if (averagePrice == 0) return 0;
+            return ((currentPrice - averagePrice) / averagePrice) * 100;
+        }
     }
 }

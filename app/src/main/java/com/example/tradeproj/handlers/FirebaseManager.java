@@ -53,11 +53,20 @@ public class FirebaseManager {
                     public void onDataChange(DataSnapshot dataSnapshot) {
                         if (dataSnapshot.exists()) {
                             UserPortfolio portfolio = dataSnapshot.getValue(UserPortfolio.class);
+
+                            // ✅ Ensure portfolio has valid structure
+                            if (portfolio == null) {
+                                portfolio = new UserPortfolio(userId, 10000.0);
+                            }
+                            if (portfolio.getHoldings() == null) {
+                                portfolio.setHoldings(new HashMap<>());
+                            }
+
                             future.complete(portfolio);
                         } else {
                             Log.d(TAG, "❌ No portfolio found. Creating new one...");
                             UserPortfolio newPortfolio = new UserPortfolio(userId, 10000.0);
-                            updateUserPortfolio(newPortfolio, false); // Avoid redundant writes
+                            updateUserPortfolio(newPortfolio, false);
                             future.complete(newPortfolio);
                         }
                     }
@@ -72,10 +81,160 @@ public class FirebaseManager {
         return future;
     }
 
-    // ✅ Fetch user's favorite stocks from Firebase
+    // ✅ Update user's portfolio in Firebase
+    public void updateUserPortfolio(UserPortfolio portfolio, boolean storePrices) {
+        FirebaseUser user = getCurrentUser();
+        if (user == null) {
+            Log.e(TAG, "❌ Cannot update portfolio, user not logged in!");
+            return;
+        }
+
+        String userId = user.getUid();
+        databaseReference.child(userId).child("portfolio").setValue(portfolio)
+                .addOnSuccessListener(aVoid -> {
+                    Log.d(TAG, "✅ Portfolio successfully updated");
+
+                    // ✅ Store Last Known Stock Prices **ONLY if trade happened**
+                    if (storePrices) {
+                        storeLastStockPrices(portfolio.getHoldings());
+                    }
+                })
+                .addOnFailureListener(e -> Log.e(TAG, "❌ Portfolio update failed", e));
+    }
+
+    // ✅ Store last known stock prices in Firebase
+    private void storeLastStockPrices(Map<String, UserPortfolio.Holding> holdings) {
+        FirebaseUser user = getCurrentUser();
+        if (user == null) {
+            Log.e(TAG, "❌ Cannot store stock prices, user not logged in!");
+            return;
+        }
+
+        String userId = user.getUid();
+        DatabaseReference stockPricesRef = databaseReference.child(userId).child("lastStockPrices");
+
+        if (holdings == null || holdings.isEmpty()) {
+            Log.d(TAG, "⚠ No holdings to store prices for.");
+            return;
+        }
+
+        Map<String, Object> priceUpdates = new HashMap<>();
+        for (Map.Entry<String, UserPortfolio.Holding> entry : holdings.entrySet()) {
+            String symbol = entry.getKey();
+            double lastPrice = entry.getValue().getAveragePrice();
+            priceUpdates.put(symbol, lastPrice);
+        }
+
+        stockPricesRef.updateChildren(priceUpdates)
+                .addOnSuccessListener(aVoid -> Log.d(TAG, "✅ Stored last known stock prices in Firebase"))
+                .addOnFailureListener(e -> Log.e(TAG, "❌ Failed to store last known stock prices", e));
+    }
+
+    // ✅ Deposit cash into user's account
+    public void depositCash(double amount, Runnable onSuccess, Runnable onFailure) {
+        getUserPortfolio().thenAccept(portfolio -> {
+            if (portfolio == null) {
+                Log.e(TAG, "❌ Portfolio not found, cannot deposit cash.");
+                onFailure.run();
+                return;
+            }
+
+            portfolio.updateCashBalance(amount);
+            updateUserPortfolio(portfolio, false);
+
+            Log.d(TAG, "✅ Deposited $" + amount + " into account");
+            onSuccess.run();
+        }).exceptionally(e -> {
+            Log.e(TAG, "❌ Error depositing cash", e);
+            onFailure.run();
+            return null;
+        });
+    }
+
+    // ✅ Buy stock and update portfolio
+    public void buyStock(String symbol, int quantity, double price, Runnable onSuccess, Runnable onFailure) {
+        getUserPortfolio().thenAccept(portfolio -> {
+            if (portfolio == null) {
+                onFailure.run();
+                return;
+            }
+
+            double totalCost = quantity * price;
+            if (portfolio.getCashBalance() < totalCost) {
+                onFailure.run();
+                return;
+            }
+
+            portfolio.updateCashBalance(-totalCost);
+            portfolio.addHolding(symbol, quantity, price);
+            updateUserPortfolio(portfolio, true);
+
+            onSuccess.run();
+        }).exceptionally(e -> {
+            onFailure.run();
+            return null;
+        });
+    }
+
+    // ✅ Sell stock and update portfolio
+    public void sellStock(String symbol, int quantity, double price, Runnable onSuccess, Runnable onFailure) {
+        getUserPortfolio().thenAccept(portfolio -> {
+            if (portfolio == null) {
+                onFailure.run();
+                return;
+            }
+
+            UserPortfolio.Holding holding = portfolio.getHoldings().getOrDefault(symbol, new UserPortfolio.Holding(0, 0, 0));
+            int ownedShares = holding.getQuantity();
+
+            if (ownedShares == 0 || quantity > ownedShares) {
+                onFailure.run();
+                return;
+            }
+
+            double totalSaleValue = quantity * price;
+            portfolio.removeHolding(symbol, quantity);
+            portfolio.updateCashBalance(totalSaleValue);
+
+            updateUserPortfolio(portfolio, true);
+            onSuccess.run();
+        }).exceptionally(e -> {
+            onFailure.run();
+            return null;
+        });
+    }
+
+    // ✅ Add stock to favorites
+    public void addStockToFavorites(String symbol) {
+        FirebaseUser user = getCurrentUser();
+        if (user == null) {
+            Log.e(TAG, "❌ User not logged in, cannot add to favorites.");
+            return;
+        }
+
+        String userId = user.getUid();
+        databaseReference.child(userId).child("favorites").child(symbol).setValue(symbol)
+                .addOnSuccessListener(aVoid -> Log.d(TAG, "✅ Added to favorites: " + symbol))
+                .addOnFailureListener(e -> Log.e(TAG, "❌ Failed to add to favorites", e));
+    }
+
+    // ✅ Remove stock from favorites
+    public void removeStockFromFavorites(String symbol) {
+        FirebaseUser user = getCurrentUser();
+        if (user == null) {
+            Log.e(TAG, "❌ User not logged in, cannot remove from favorites.");
+            return;
+        }
+
+        String userId = user.getUid();
+        databaseReference.child(userId).child("favorites").child(symbol).removeValue()
+                .addOnSuccessListener(aVoid -> Log.d(TAG, "✅ Removed from favorites: " + symbol))
+                .addOnFailureListener(e -> Log.e(TAG, "❌ Failed to remove from favorites", e));
+    }
+
     public CompletableFuture<List<String>> getUserFavorites() {
         CompletableFuture<List<String>> future = new CompletableFuture<>();
-        FirebaseUser user = firebaseAuth.getCurrentUser();
+        FirebaseUser user = getCurrentUser();
 
         if (user == null) {
             Log.e(TAG, "❌ User not logged in, cannot fetch favorites.");
@@ -105,167 +264,5 @@ public class FirebaseManager {
 
         return future;
     }
-
-    // ✅ Update user's portfolio in Firebase
-    public void updateUserPortfolio(UserPortfolio portfolio, boolean storePrices) {
-        FirebaseUser user = getCurrentUser();
-        if (user == null) {
-            Log.e(TAG, "❌ Cannot update portfolio, user not logged in!");
-            return;
-        }
-
-        String userId = user.getUid();
-        databaseReference.child(userId).child("portfolio").setValue(portfolio)
-                .addOnSuccessListener(aVoid -> {
-                    Log.d(TAG, "✅ Portfolio successfully updated");
-
-                    // ✅ Store Last Known Stock Prices **ONLY if trade happened**
-                    if (storePrices) {
-                        storeLastStockPrices(portfolio.getHoldings());
-                    }
-                })
-                .addOnFailureListener(e -> Log.e(TAG, "❌ Portfolio update failed", e));
-    }
-
-    /**
-     * ✅ Stores the last known stock prices for each holding in Firebase
-     */
-    private void storeLastStockPrices(Map<String, UserPortfolio.Holding> holdings) {
-        FirebaseUser user = getCurrentUser();
-        if (user == null) {
-            Log.e(TAG, "❌ Cannot store stock prices, user not logged in!");
-            return;
-        }
-
-        String userId = user.getUid();
-        DatabaseReference stockPricesRef = databaseReference.child(userId).child("lastStockPrices");
-
-        if (holdings == null || holdings.isEmpty()) {
-            Log.d(TAG, "⚠ No holdings to store prices for.");
-            return;
-        }
-
-        Map<String, Object> priceUpdates = new HashMap<>();
-        for (Map.Entry<String, UserPortfolio.Holding> entry : holdings.entrySet()) {
-            String symbol = entry.getKey();
-            double lastPrice = entry.getValue().getAveragePrice();
-            priceUpdates.put(symbol, lastPrice);
-        }
-
-        stockPricesRef.updateChildren(priceUpdates)
-                .addOnSuccessListener(aVoid -> Log.d(TAG, "✅ Stored last known stock prices in Firebase"))
-                .addOnFailureListener(e -> Log.e(TAG, "❌ Failed to store last known stock prices", e));
-    }
-
-
-    // ✅ Deposit cash into user's account
-    public void depositCash(double amount, Runnable onSuccess, Runnable onFailure) {
-        getUserPortfolio().thenAccept(portfolio -> {
-            if (portfolio == null) {
-                Log.e(TAG, "❌ Portfolio not found, cannot deposit cash.");
-                onFailure.run();
-                return;
-            }
-
-            portfolio.updateCashBalance(amount);
-            updateUserPortfolio(portfolio, false);
-
-            Log.d(TAG, "✅ Deposited $" + amount + " into account");
-            onSuccess.run();
-        }).exceptionally(e -> {
-            Log.e(TAG, "❌ Error depositing cash", e);
-            onFailure.run();
-            return null;
-        });
-    }
-
-    // ✅ Buy stock and update portfolio
-    public void buyStock(String symbol, int quantity, double price, Runnable onSuccess, Runnable onFailure) {
-        getUserPortfolio().thenAccept(portfolio -> {
-            if (portfolio == null) {
-                Log.e(TAG, "❌ Portfolio not found, cannot buy stock.");
-                onFailure.run();
-                return;
-            }
-
-            double totalCost = quantity * price;
-
-            if (portfolio.getCashBalance() < totalCost) {
-                Log.e(TAG, "❌ Not enough cash to buy stock!");
-                onFailure.run();
-                return;
-            }
-
-            portfolio.updateCashBalance(-totalCost);
-            portfolio.addHolding(symbol, quantity, price);
-            updateUserPortfolio(portfolio, true);
-
-            Log.d(TAG, "✅ Purchased " + quantity + " of " + symbol + " @ $" + price);
-            onSuccess.run();
-        }).exceptionally(e -> {
-            Log.e(TAG, "❌ Error buying stock", e);
-            onFailure.run();
-            return null;
-        });
-    }
-
-    // ✅ Sell stock and update portfolio
-    public void sellStock(String symbol, int quantity, double price, Runnable onSuccess, Runnable onFailure) {
-        getUserPortfolio().thenAccept(portfolio -> {
-            if (portfolio == null) {
-                Log.e(TAG, "❌ Portfolio not found, cannot sell stock.");
-                onFailure.run();
-                return;
-            }
-
-            int ownedShares = portfolio.getHoldings().getOrDefault(symbol, new UserPortfolio.Holding(0, 0)).getQuantity();
-            if (quantity > ownedShares) {
-                Log.e(TAG, "❌ Not enough shares to sell!");
-                onFailure.run();
-                return;
-            }
-
-            double totalSaleValue = quantity * price;
-            portfolio.removeHolding(symbol, quantity);
-            portfolio.updateCashBalance(totalSaleValue);
-            updateUserPortfolio(portfolio, true);
-
-            Log.d(TAG, "✅ Sold " + quantity + " of " + symbol + " @ $" + price);
-            onSuccess.run();
-        }).exceptionally(e -> {
-            Log.e(TAG, "❌ Error selling stock", e);
-            onFailure.run();
-            return null;
-        });
-    }
-
-    public void addStockToFavorites(String symbol) {
-        FirebaseUser user = getCurrentUser();
-        if (user == null) {
-            Log.e(TAG, "❌ User not logged in, cannot add to favorites.");
-            return;
-        }
-
-        String userId = user.getUid();
-        databaseReference.child(userId).child("favorites").child(symbol).setValue(symbol)
-                .addOnSuccessListener(aVoid -> Log.d(TAG, "✅ Added to favorites: " + symbol))
-                .addOnFailureListener(e -> Log.e(TAG, "❌ Failed to add to favorites", e));
-    }
-
-    public void removeStockFromFavorites(String symbol) {
-        FirebaseUser user = getCurrentUser();
-        if (user == null) {
-            Log.e(TAG, "❌ User not logged in, cannot remove from favorites.");
-            return;
-        }
-
-        String userId = user.getUid();
-        databaseReference.child(userId).child("favorites").child(symbol).removeValue()
-                .addOnSuccessListener(aVoid -> Log.d(TAG, "✅ Removed from favorites: " + symbol))
-                .addOnFailureListener(e -> Log.e(TAG, "❌ Failed to remove from favorites", e));
-    }
-
-
-
 
 }
