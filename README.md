@@ -8,4 +8,3 @@
 
 ![Screenshot 2025-02-25 at 10 16 32](https://github.com/user-attachments/assets/94210386-e6c8-4e98-8867-f57a09c3818a)
 
-![Screenshot 2025-02-25 at 10 16 32](https://github.com/user-attachments/assets/0269e08d-38fe-43e7-9dcf-4deac034ca27)
