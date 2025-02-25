@@ -23,8 +23,10 @@ import com.example.tradeproj.handlers.FirebaseManager;
 import com.example.tradeproj.items.StockItem;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Collections;
+import java.util.Map;
 
 public class Trade extends Fragment {
     private RecyclerView stocksRecyclerView;
@@ -36,7 +38,7 @@ public class Trade extends Fragment {
     private FirebaseManager firebaseManager;
     private String lastSearchQuery = "";
 
-    private List<StockItem> cachedTopStocks = new ArrayList<>(); // ✅ Stores the fixed top 10 stocks
+    private List<StockItem> cachedTopStocks = new ArrayList<>(); //  Stores the fixed top 10 stocks
 
     private static final String TAG = "TradeFragment";
 
@@ -65,17 +67,20 @@ public class Trade extends Fragment {
         stockViewModel = new ViewModelProvider(this).get(StockViewModel.class);
         stockViewModel.getStockList().observe(getViewLifecycleOwner(), this::updateStockList);
 
-        fetchTopStocks(); // ✅ Load top stocks ONCE
+        fetchTopStocks(); // Load top stocks ONCE
 
         portfolioButton.setOnClickListener(v -> Navigation.findNavController(view).navigate(R.id.portfolio));
 
-        // ✅ Handle Search
+        // Fetch favorite stocks and check price changes
+        checkFavoriteStockUpdates();
+
+        // Handle Search
         searchView.setOnQueryTextListener(new SearchView.OnQueryTextListener() {
             @Override
             public boolean onQueryTextSubmit(String query) {
                 if (!query.trim().isEmpty()) {
                     lastSearchQuery = query.toUpperCase().trim();
-                    fetchStockPrices(Collections.singletonList(lastSearchQuery)); // ✅ Use FinnhubApi function
+                    fetchStockPrices(Collections.singletonList(lastSearchQuery)); // Use FinnhubApi function
                 }
                 return true;
             }
@@ -84,7 +89,7 @@ public class Trade extends Fragment {
             public boolean onQueryTextChange(String newText) {
                 lastSearchQuery = newText.trim();
                 if (newText.isEmpty()) {
-                    restoreTopStocks(); // ✅ Restore SAME top 10 stocks
+                    restoreTopStocks(); // Restore SAME top 10 stocks
                 } else {
                     filterStockList(newText);
                 }
@@ -93,12 +98,13 @@ public class Trade extends Fragment {
         });
     }
 
+
     /**
-     * ✅ Ensures top 10 stocks are only fetched once and stored.
+     *  Ensures top 10 stocks are only fetched once and stored.
      */
     private void fetchTopStocks() {
         if (!cachedTopStocks.isEmpty()) {
-            Log.d(TAG, "✅ Using cached top 10 stocks.");
+            Log.d(TAG, " Using cached top 10 stocks.");
             updateStockList(cachedTopStocks);
             return;
         }
@@ -108,27 +114,27 @@ public class Trade extends Fragment {
             if (symbols != null && !symbols.isEmpty()) {
                 finnhubApi.fetchStockPrices(symbols,
                         stockItems -> requireActivity().runOnUiThread(() -> {
-                            cachedTopStocks = new ArrayList<>(stockItems); // ✅ Cache top stocks
+                            cachedTopStocks = new ArrayList<>(stockItems); //  Cache top stocks
                             updateStockList(stockItems);
                         }),
-                        error -> Log.e(TAG, "❌ Error fetching top stock prices: " + error)
+                        error -> Log.e(TAG, " Error fetching top stock prices: " + error)
                 );
             }
         });
     }
 
     /**
-     * ✅ Fetches stock prices for searched stock.
+     * Fetches stock prices for searched stock.
      */
     private void fetchStockPrices(List<String> symbols) {
         finnhubApi.fetchStockPrices(symbols,
                 stockItems -> requireActivity().runOnUiThread(() -> updateStockList(stockItems)),
-                error -> Log.e(TAG, "❌ Error fetching stock prices: " + error)
+                error -> Log.e(TAG, " Error fetching stock prices: " + error)
         );
     }
 
     /**
-     * ✅ Updates stock list while caching top 10 stocks.
+     * Updates stock list while caching top 10 stocks.
      */
     private void updateStockList(List<StockItem> stockItems) {
         if (cachedTopStocks.isEmpty()) {
@@ -137,22 +143,22 @@ public class Trade extends Fragment {
 
         firebaseManager.getUserFavorites().thenAccept(favoriteSymbols -> {
             for (StockItem stock : stockItems) {
-                stock.setFavorite(favoriteSymbols.contains(stock.getSymbol())); // ✅ Update favorite status
+                stock.setFavorite(favoriteSymbols.contains(stock.getSymbol())); //  Update favorite status
             }
             requireActivity().runOnUiThread(() -> stockAdapter.updateStocks(stockItems));
         });
     }
 
     /**
-     * ✅ Restores the **same** top 10 stocks when clearing the search.
+     *  Restores the **same** top 10 stocks when clearing the search.
      */
     private void restoreTopStocks() {
-        Log.d(TAG, "🔄 Restoring top 10 stocks...");
+        Log.d(TAG, " Restoring top 10 stocks...");
         updateStockList(cachedTopStocks);
     }
 
     /**
-     * ✅ Filters the list dynamically while typing.
+     * Filters the list dynamically while typing.
      */
     private void filterStockList(String query) {
         List<StockItem> filteredList = new ArrayList<>();
@@ -164,8 +170,67 @@ public class Trade extends Fragment {
         updateStockList(filteredList);
     }
 
+    private void checkFavoriteStockUpdates() {
+        firebaseManager.getUserFavorites().thenAccept(favoriteSymbols -> {
+            if (favoriteSymbols == null || favoriteSymbols.isEmpty()) {
+                Log.d(TAG, " No favorite stocks to check.");
+                return;
+            }
+
+            firebaseManager.getLastStockPrices().thenAccept(lastPrices -> {
+                // Fetch latest stock prices
+                finnhubApi.fetchStockPrices(new ArrayList<>(favoriteSymbols),
+                        stockItems -> {
+                            List<String> changedStocks = new ArrayList<>();
+
+                            for (StockItem stock : stockItems) {
+                                double lastPrice = lastPrices.getOrDefault(stock.getSymbol(), stock.getPrice());
+                                if (lastPrice != stock.getPrice()) { //  Compare last and current price
+                                    changedStocks.add(stock.getSymbol() + ": $" + lastPrice + " → $" + stock.getPrice());
+                                }
+                            }
+
+                            if (!changedStocks.isEmpty()) {
+                                showStockNotification(changedStocks);
+                            } else {
+                                showStockNotification(Collections.singletonList("No changes in favorite stocks"));
+                            }
+
+                            // Store the latest prices for future comparison
+                            Map<String, Double> updatedPrices = new HashMap<>();
+                            for (StockItem stock : stockItems) {
+                                updatedPrices.put(stock.getSymbol(), stock.getPrice());
+                            }
+                            firebaseManager.storeLastStockPrices(updatedPrices);
+                        },
+                        errorMessage -> Log.e(TAG, " Error fetching stock prices: " + errorMessage)
+                );
+
+            }).exceptionally(e -> {
+                Log.e(TAG, " Error retrieving last stock prices", e);
+                return null;
+            });
+
+        }).exceptionally(e -> {
+            Log.e(TAG, " Error retrieving favorite stocks", e);
+            return null;
+        });
+    }
+
+    private void showStockNotification(List<String> stockChanges) {
+        requireActivity().runOnUiThread(() -> {
+            new AlertDialog.Builder(getContext())
+                    .setTitle("Stock Price Update")
+                    .setMessage(String.join("\n", stockChanges)) //  List all price changes
+                    .setPositiveButton("OK", (dialog, which) -> dialog.dismiss())
+                    .show();
+        });
+    }
+
+
+
     /**
-     * ✅ Displays Buy/Sell dialog.
+     *  Displays Buy/Sell dialog.
      */
     private void showBuySellDialog(View parentView, StockItem stock) {
         new AlertDialog.Builder(getContext())
@@ -188,14 +253,14 @@ public class Trade extends Fragment {
     @Override
     public void onResume() {
         super.onResume();
-        Log.d(TAG, "📢 Resuming Trade Page...");
+        Log.d(TAG, "Resuming Trade Page...");
 
-        // ✅ Fetch Top 10 Active Stocks from FinnhubApi
+        // Fetch Top 10 Active Stocks from FinnhubApi
         finnhubApi.fetchTopActiveStocks(symbols -> {
             if (symbols != null && !symbols.isEmpty()) {
                 finnhubApi.fetchStockPrices(symbols,
                         stockItems -> requireActivity().runOnUiThread(() -> stockAdapter.updateStocks(stockItems)),
-                        error -> Log.e(TAG, "❌ Error fetching top stock prices: " + error)
+                        error -> Log.e(TAG, " Error fetching top stock prices: " + error)
                 );
             }
         });
