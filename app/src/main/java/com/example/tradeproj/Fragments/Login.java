@@ -42,7 +42,7 @@ public class Login extends Fragment {
         Button loginButton = view.findViewById(R.id.btnToTrade);
         Button regButton = view.findViewById(R.id.btnToRegister);
 
-        // ✅ Ensure Email Field Accepts Text and Suggests Emails
+        //  Ensure Email Field Accepts Text and Suggests Emails
         emailField.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS);
         emailField.setHint("Enter Email");
         emailField.setFocusable(true);
@@ -66,60 +66,60 @@ public class Login extends Fragment {
 
 
     private void loginUser(String email, String password) {
-        Log.d(TAG, "🚀 Attempting login with Email: " + email);
+        Log.d(TAG, " Attempting login with Email: " + email);
 
         mAuth.signInWithEmailAndPassword(email, password)
                 .addOnCompleteListener(requireActivity(), task -> {
                     if (task.isSuccessful()) {
                         FirebaseUser user = mAuth.getCurrentUser();
                         if (user != null) {
-                            Log.d(TAG, "✅ User logged in: " + user.getEmail());
-                            Toast.makeText(requireActivity(), "✅ Login Successful!", Toast.LENGTH_SHORT).show();
-                            checkUserInDatabase(user.getEmail(), requireView()); // ✅ Search by email now
+                            Log.d(TAG, " User logged in: " + user.getEmail());
+                            Toast.makeText(requireActivity(), " Login Successful!", Toast.LENGTH_SHORT).show();
+                            checkUserInDatabase(user.getEmail(), requireView()); //  Search by email now
                         } else {
-                            Log.e(TAG, "❌ Login succeeded, but user object is null!");
-                            Toast.makeText(requireActivity(), "❌ Error: User object is null!", Toast.LENGTH_SHORT).show();
+                            Log.e(TAG, " Login succeeded, but user object is null!");
+                            Toast.makeText(requireActivity(), " Error: User object is null!", Toast.LENGTH_SHORT).show();
                         }
                     } else {
-                        Log.e(TAG, "❌ Login Failed: " + task.getException());
-                        Toast.makeText(requireActivity(), "❌ Login Failed! Check credentials.", Toast.LENGTH_LONG).show();
+                        Log.e(TAG, " Login Failed: " + task.getException());
+                        Toast.makeText(requireActivity(), " Login Failed! Check credentials.", Toast.LENGTH_LONG).show();
                     }
                 });
     }
 
 
     private void checkUserInDatabase(String email, View view) {
-        Log.d(TAG, "🔍 Searching user in database by Email: " + email);
+        Log.d(TAG, "Searching user in database by Email: " + email);
 
-        DatabaseReference usersRef = FirebaseDatabase.getInstance().getReference("users"); // ✅ Make sure it's lowercase "users"
+        DatabaseReference usersRef = FirebaseDatabase.getInstance().getReference("users"); // Make sure it's lowercase "users"
 
         usersRef.orderByChild("email").equalTo(email).addListenerForSingleValueEvent(new ValueEventListener() {
             @Override
             public void onDataChange(@NonNull DataSnapshot snapshot) {
-                Log.d(TAG, "📄 Database Snapshot: " + snapshot.toString());
+                Log.d(TAG, "Database Snapshot: " + snapshot.toString());
 
                 if (snapshot.exists()) {
-                    Log.d(TAG, "✅ User found in database.");
-                    Toast.makeText(requireActivity(), "✅ User Verified! Redirecting...", Toast.LENGTH_SHORT).show();
+                    Log.d(TAG, "User found in database.");
+                    Toast.makeText(requireActivity(), "User Verified! Redirecting...", Toast.LENGTH_SHORT).show();
 
                     if (isAdded() && view != null) {
-                        Log.d(TAG, "🚀 Navigating to Trade...");
+                        Log.d(TAG, " Navigating to Trade...");
                         Navigation.findNavController(view).navigate(R.id.action_login_to_trade);
                     } else {
-                        Log.e(TAG, "❌ Fragment not attached or view is null. Cannot navigate.");
-                        Toast.makeText(requireActivity(), "❌ Navigation failed!", Toast.LENGTH_LONG).show();
+                        Log.e(TAG, " Fragment not attached or view is null. Cannot navigate.");
+                        Toast.makeText(requireActivity(), " Navigation failed!", Toast.LENGTH_LONG).show();
                     }
                 } else {
-                    Log.e(TAG, "❌ User not found in database!");
-                    Toast.makeText(requireActivity(), "❌ User not found! Register first.", Toast.LENGTH_SHORT).show();
+                    Log.e(TAG, " User not found in database!");
+                    Toast.makeText(requireActivity(), " User not found! Register first.", Toast.LENGTH_SHORT).show();
                     mAuth.signOut();
                 }
             }
 
             @Override
             public void onCancelled(@NonNull DatabaseError error) {
-                Log.e(TAG, "❌ Database query failed: " + error.getMessage());
-                Toast.makeText(requireActivity(), "❌ Database error!", Toast.LENGTH_SHORT).show();
+                Log.e(TAG, " Database query failed: " + error.getMessage());
+                Toast.makeText(requireActivity(), "Database error!", Toast.LENGTH_SHORT).show();
             }
         });
     }
