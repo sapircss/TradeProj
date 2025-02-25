@@ -26,6 +26,7 @@ import com.example.tradeproj.items.StockItem;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 public class portfolio extends Fragment {
     private RecyclerView portfolioRecyclerView;
@@ -77,7 +78,7 @@ public class portfolio extends Fragment {
 
             List<String> symbols = new ArrayList<>(portfolio.getHoldings().keySet());
 
-            // ✅ Reset the table and RecyclerView
+            //  Reset the table and RecyclerView
             requireActivity().runOnUiThread(() -> {
                 profitLossTable.removeAllViews();
                 addTableHeader();
@@ -96,6 +97,7 @@ public class portfolio extends Fragment {
     private void fetchStockPricesWithDelay(List<String> symbols, UserPortfolio portfolio) {
         List<StockItem> updatedStockItems = new ArrayList<>();
         AtomicInteger completedRequests = new AtomicInteger(0);
+        AtomicReference<Double> totalPnl = new AtomicReference<>(0.0); // To store total P&L
 
         for (String symbol : symbols) {
             finnhubApi.fetchStockPrices(
@@ -119,10 +121,13 @@ public class portfolio extends Fragment {
                             requireActivity().runOnUiThread(() ->
                                     addStockRow(stock.getSymbol(), buyPrice, currentPrice, quantity, pnl)
                             );
+
+                            totalPnl.updateAndGet(v -> v + pnl); // Accumulate total P&L
                         }
 
                         if (completedRequests.incrementAndGet() == symbols.size()) {
                             updateUI(updatedStockItems);
+                            updateTotalProfitLoss(totalPnl.get()); // Update UI with total P&L
                         }
                     },
                     errorMessage -> {}
@@ -130,10 +135,19 @@ public class portfolio extends Fragment {
         }
     }
 
+    private void updateTotalProfitLoss(double totalPnl) {
+        requireActivity().runOnUiThread(() -> {
+            totalProfitLossTextView.setText(String.format("Total Profit/Loss: $%.2f", totalPnl));
+            totalProfitLossTextView.setTextColor(totalPnl >= 0 ? Color.GREEN : Color.RED);
+        });
+    }
+
+
+
     private void updateUI(List<StockItem> updatedStockItems) {
         requireActivity().runOnUiThread(() -> {
             adapter.updateStocks(updatedStockItems);
-            adapter.notifyDataSetChanged(); // ✅ Ensure RecyclerView updates properly
+            adapter.notifyDataSetChanged(); // Ensure RecyclerView updates properly
         });
     }
 
@@ -163,7 +177,7 @@ public class portfolio extends Fragment {
             row.addView(pnlCell);
 
             profitLossTable.addView(row);
-            profitLossTable.invalidate(); // ✅ Force refresh
+            profitLossTable.invalidate(); // Force refresh
         });
     }
 
@@ -185,6 +199,8 @@ public class portfolio extends Fragment {
         textView.setTextColor(Color.BLACK);
         return textView;
     }
+
+
 
     private void showActionDialog(View view, String stockSymbol) {
         new AlertDialog.Builder(getContext())
